@@ -18,6 +18,7 @@ package com.android.messaging.datamodel;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.Resources;
 import android.database.Cursor;
 import android.graphics.Typeface;
@@ -58,6 +59,8 @@ import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.PendingIntentConstants;
 import com.android.messaging.util.UriUtil;
 import com.google.common.collect.Lists;
+
+import com.cyanogenmod.messaging.quickmessage.NotificationInfo;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -219,6 +222,9 @@ public abstract class MessageNotificationState extends NotificationState {
         // Number of participants
         final int mParticipantCount;
 
+        // Display number of the sender
+        final String mSenderDisplayDestination;
+
         public ConversationLineInfo(final String conversationId,
                 final boolean isGroup,
                 final String groupConversationName,
@@ -231,7 +237,8 @@ public abstract class MessageNotificationState extends NotificationState {
                 final Uri avatarUri,
                 final Uri contactUri,
                 final int subId,
-                final int participantCount) {
+                final int participantCount,
+                final String senderDisplayDestination) {
             mConversationId = conversationId;
             mIsGroup = isGroup;
             mGroupConversationName = groupConversationName;
@@ -247,6 +254,7 @@ public abstract class MessageNotificationState extends NotificationState {
             mNotificationVibrate = notificationVibrate;
             mSubId = subId;
             mParticipantCount = participantCount;
+            mSenderDisplayDestination = senderDisplayDestination;
         }
 
         public int getLatestMessageNotificationType() {
@@ -603,6 +611,19 @@ public abstract class MessageNotificationState extends NotificationState {
             return notifStyle;
         }
 
+        @Override
+        public NotificationInfo getNotificationInfo() {
+            ConversationLineInfo convInfo = mConvList.mConvInfos.get(0);
+            NotificationInfo ni = null;
+            if (convInfo != null && !convInfo.mIsGroup) {
+                String name = mTitle;
+                String number = convInfo.mSenderDisplayDestination;
+                ni = new NotificationInfo(name, number, convInfo.mContactUri,
+                        convInfo.getLatestMessageLineInfo().mText, convInfo.mReceivedTimestamp,
+                        convInfo.mConversationId);
+            }
+            return ni;
+        }
     }
 
     private static boolean firstNameUsedMoreThanOnce(
@@ -850,6 +871,7 @@ public abstract class MessageNotificationState extends NotificationState {
                     String authorFullName = convMessageData.getSenderFullName();
                     String authorFirstName = convMessageData.getSenderFirstName();
                     final String messageText = convMessageData.getText();
+                    final String senderDestination = convMessageData.getSenderDisplayDestination();
 
                     final String convId = convMessageData.getConversationId();
                     final String messageId = convMessageData.getMessageId();
@@ -892,7 +914,8 @@ public abstract class MessageNotificationState extends NotificationState {
                                 avatarUri,
                                 convMessageData.getSenderContactLookupUri(),
                                 subId,
-                                convData.getParticipantCount());
+                                convData.getParticipantCount(),
+                                senderDestination);
                         convLineInfos.put(convId, currConvInfo);
                     }
                     // Prepare the message line
