@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- QuickMessage -->
+    <dimen name="qm_message_height">210dp</dimen>
+    <dimen name="qm_dialog_button_bar_height">48dip</dimen>
+    <dimen name="input_text_height">48dip</dimen>
+</resources>
