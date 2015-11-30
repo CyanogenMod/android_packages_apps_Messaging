@@ -149,4 +149,6 @@ public class ContactIconView extends AsyncImageView {
             setOnClickListener(null);
         }
     }
+
+
 }
