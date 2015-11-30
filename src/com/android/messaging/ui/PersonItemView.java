@@ -21,12 +21,14 @@ import android.support.v4.text.BidiFormatter;
 import android.support.v4.text.TextDirectionHeuristicsCompat;
 import android.text.TextUtils;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnLayoutChangeListener;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.android.messaging.BugleApplication;
 import com.android.messaging.R;
 import com.android.messaging.datamodel.binding.BindingBase;
 import com.android.messaging.datamodel.binding.DetachableBinding;
@@ -34,6 +36,9 @@ import com.android.messaging.datamodel.data.PersonItemData;
 import com.android.messaging.datamodel.data.PersonItemData.PersonItemDataListener;
 import com.android.messaging.util.AccessibilityUtil;
 import com.android.messaging.util.UiUtils;
+import com.cyanogen.lookup.phonenumber.response.LookupResponse;
+import com.cyanogenmod.messaging.lookup.LookupProviderManager.LookupProviderListener;
+import com.cyanogenmod.messaging.ui.AttributionContactIconView;
 
 /**
  * Shows a view for a "person" - could be a contact or a participant. This always shows a
@@ -44,7 +49,8 @@ import com.android.messaging.util.UiUtils;
  * between the underlying data (e.g. ParticipantData) and what the UI wants (e.g. display name).
  */
 public class PersonItemView extends LinearLayout implements PersonItemDataListener,
-        OnLayoutChangeListener {
+        OnLayoutChangeListener, LookupProviderListener {
+
     public interface PersonItemViewListener {
         void onPersonClicked(PersonItemData data);
         boolean onPersonLongClicked(PersonItemData data);
@@ -53,10 +59,11 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
     protected final DetachableBinding<PersonItemData> mBinding;
     private TextView mNameTextView;
     private TextView mDetailsTextView;
-    private ContactIconView mContactIconView;
+    private AttributionContactIconView mContactIconView;
     private View mDetailsContainer;
     private PersonItemViewListener mListener;
     private boolean mAvatarOnly;
+    private String mLastNormalizedNumber;
 
     public PersonItemView(final Context context, final AttributeSet attrs) {
         super(context, attrs);
@@ -68,7 +75,7 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
     protected void onFinishInflate() {
         mNameTextView = (TextView) findViewById(R.id.name);
         mDetailsTextView = (TextView) findViewById(R.id.details);
-        mContactIconView = (ContactIconView) findViewById(R.id.contact_icon);
+        mContactIconView = (AttributionContactIconView) findViewById(R.id.contact_icon);
         mDetailsContainer = findViewById(R.id.details_container);
         mNameTextView.addOnLayoutChangeListener(this);
     }
@@ -79,6 +86,11 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
         if (mBinding.isBound()) {
             mBinding.detach();
         }
+//        if (!TextUtils.isEmpty(mLastNormalizedNumber)) {
+//            BugleApplication.getLookupProviderClient()
+//                    .removeLookupProviderListener(mLastNormalizedNumber, this);
+//            mLastNormalizedNumber = null;
+//        }
     }
 
     @Override
@@ -99,6 +111,11 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
             }
             mBinding.unbind();
         }
+//        if (!TextUtils.isEmpty(mLastNormalizedNumber)) {
+//            BugleApplication.getLookupProviderClient()
+//                    .removeLookupProviderListener(mLastNormalizedNumber, this);
+//            mLastNormalizedNumber = null;
+//        }
 
         if (personData != null) {
             mBinding.bind(personData);
@@ -109,6 +126,11 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
             final String vocalizedDisplayName = AccessibilityUtil.getVocalizedPhoneNumber(
                     getResources(), getDisplayName());
             mNameTextView.setContentDescription(vocalizedDisplayName);
+            BugleApplication.getLookupProviderClient()
+                    .addLookupProviderListener(personData.getNormalizedDestination(), this);
+            BugleApplication.getLookupProviderClient()
+                    .lookupInfoForPhoneNumber(personData.getNormalizedDestination());
+            mLastNormalizedNumber = personData.getNormalizedDestination();
         }
         updateViewAppearance();
     }
@@ -239,4 +261,27 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
     public Intent getClickIntent() {
         return mBinding.getData().getClickIntent();
     }
+
+    @Override
+    public void onNewInfoAvailable(LookupResponse response) {
+        if (response != null) {
+            // always check for null if in a callback
+            if (mContactIconView != null) {
+                if (!TextUtils.isEmpty(response.mPhotoUrl)) {
+                    Log.i("TEST", "url: " + response.mPhotoUrl);
+                    mContactIconView.setImageUrl(response.mPhotoUrl);
+                }
+                if (response.mAttributionLogo != null) {
+                    mContactIconView.setAttributionDrawable(response.mAttributionLogo);
+                }
+            }
+            if (!TextUtils.isEmpty(response.mName)) {
+                if (mNameTextView != null) {
+                    mNameTextView.setText(response.mName);
+                }
+            }
+        }
+
+    }
+
 }
