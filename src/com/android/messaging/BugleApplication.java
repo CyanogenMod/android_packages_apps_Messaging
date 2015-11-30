@@ -27,6 +27,7 @@ import android.os.Looper;
 import android.support.v7.mms.CarrierConfigValuesLoader;
 import android.support.v7.mms.MmsManager;
 import android.telephony.CarrierConfigManager;
+import android.util.Log;
 
 import com.android.messaging.datamodel.DataModel;
 import com.android.messaging.receiver.SmsReceiver;
@@ -58,6 +59,9 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
     private UncaughtExceptionHandler sSystemUncaughtExceptionHandler;
     private static boolean sRunningTests = false;
 
+    // Lookup provider members
+    private static LookupProviderManager mLookupProviderManager;
+
     @VisibleForTesting
     protected static void setTestsRunning() {
         sRunningTests = true;
@@ -86,6 +90,7 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
         sSystemUncaughtExceptionHandler = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler(this);
         Trace.endSection();
+        mLookupProviderManager = new LookupProviderManager(this);
     }
 
     @Override
@@ -178,6 +183,7 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
             LogUtil.d(TAG, "BugleApplication.onLowMemory");
         }
         Factory.get().reclaimMemory();
+        mLookupProviderManager.onLowMemory();
     }
 
     @Override
@@ -259,4 +265,14 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
                     "oldVersion = " + existingVersion + ", newVersion = " + targetVersion);
         }
     }
+
+    /**
+     * Get the reference to
+     *
+     * @return {@link LookupProviderManager} or null
+     */
+    public static ILookupClient getLookupProviderClient() {
+        return mLookupProviderManager;
+    }
+
 }
