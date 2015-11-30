@@ -36,7 +36,9 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import com.android.messaging.BugleApplication;
 import com.android.messaging.Factory;
+import com.cyanogenmod.messaging.lookup.LookupProviderManager;
 import com.android.messaging.R;
 import com.android.messaging.annotation.VisibleForAnimation;
 import com.android.messaging.datamodel.MessagingContentProvider;
@@ -46,8 +48,8 @@ import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.datamodel.media.UriImageRequestDescriptor;
 import com.android.messaging.sms.MmsUtils;
 import com.android.messaging.ui.AsyncImageView;
+import com.cyanogenmod.messaging.ui.AttributionContactIconView;
 import com.android.messaging.ui.AudioAttachmentView;
-import com.android.messaging.ui.ContactIconView;
 import com.android.messaging.ui.SnackBar;
 import com.android.messaging.ui.SnackBarInteraction;
 import com.android.messaging.util.Assert;
@@ -58,6 +60,7 @@ import com.android.messaging.util.PhoneUtils;
 import com.android.messaging.util.Typefaces;
 import com.android.messaging.util.UiUtils;
 import com.android.messaging.util.UriUtil;
+import com.cyanogen.lookup.phonenumber.response.LookupResponse;
 
 import java.util.List;
 
@@ -65,7 +68,7 @@ import java.util.List;
  * The view for a single entry in a conversation list.
  */
 public class ConversationListItemView extends FrameLayout implements OnClickListener,
-        OnLongClickListener, OnLayoutChangeListener {
+        OnLongClickListener, OnLayoutChangeListener, LookupProviderManager.LookupProviderListener {
     static final int UNREAD_SNIPPET_LINE_COUNT = 3;
     static final int NO_UNREAD_SNIPPET_LINE_COUNT = 1;
     private int mListItemReadColor;
@@ -121,7 +124,7 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
     private TextView mSnippetTextView;
     private TextView mSubjectTextView;
     private TextView mTimestampTextView;
-    private ContactIconView mContactIconView;
+    private AttributionContactIconView mContactIconView;
     private ImageView mContactCheckmarkView;
     private ImageView mNotificationBellView;
     private ImageView mFailedStatusIconView;
@@ -130,6 +133,7 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
     private AsyncImageView mImagePreviewView;
     private AudioAttachmentView mAudioAttachmentView;
     private HostInterface mHostInterface;
+    private String mCurrentNumber;
 
     public ConversationListItemView(final Context context, final AttributeSet attrs) {
         super(context, attrs);
@@ -146,7 +150,7 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
         mSnippetTextView = (TextView) findViewById(R.id.conversation_snippet);
         mSubjectTextView = (TextView) findViewById(R.id.conversation_subject);
         mTimestampTextView = (TextView) findViewById(R.id.conversation_timestamp);
-        mContactIconView = (ContactIconView) findViewById(R.id.conversation_icon);
+        mContactIconView = (AttributionContactIconView) findViewById(R.id.conversation_icon);
         mContactCheckmarkView = (ImageView) findViewById(R.id.conversation_checkmark);
         mNotificationBellView = (ImageView) findViewById(R.id.conversation_notification_bell);
         mFailedStatusIconView = (ImageView) findViewById(R.id.conversation_failed_status_icon);
@@ -359,6 +363,12 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
         mHostInterface = hostInterface;
         mData.bind(cursor);
 
+        // Reset lookup provider listener
+        if (!TextUtils.isEmpty(mCurrentNumber)) {
+            BugleApplication.getLookupProviderClient().removeLookupProviderListener(mCurrentNumber,
+                    this);
+        }
+
         resetAnimatingState();
 
         mSwipeableContainer.setOnClickListener(this);
@@ -451,6 +461,10 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
         mContactIconView.setOnLongClickListener(this);
         mContactIconView.setClickable(!mHostInterface.isSelectionMode());
         mContactIconView.setLongClickable(!mHostInterface.isSelectionMode());
+
+        mCurrentNumber = mData.getOtherParticipantNormalizedDestination();
+        BugleApplication.getLookupProviderClient().addLookupProviderListener(mCurrentNumber, this);
+        BugleApplication.getLookupProviderClient().lookupInfoForPhoneNumber(mCurrentNumber);
 
         mContactCheckmarkView.setVisibility(checkmarkVisiblity);
         mFailedStatusIconView.setVisibility(failStatusVisiblity);
@@ -641,4 +655,32 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
         }
         return snippetText;
     }
+
+    @Override
+    public void onNewInfoAvailable(LookupResponse response) {
+        // if (we need to) {
+        bindLookupResponse(response);
+        // }
+    }
+
+    public void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        BugleApplication.getLookupProviderClient().removeLookupProviderListener(
+                mData.getOtherParticipantNormalizedDestination(), this);
+    }
+
+    private void bindLookupResponse(LookupResponse response) {
+        if (mContactIconView != null) {
+            // [TODO][MSB]: Check if current number still the same as response.mAddress set
+            // logo/data
+            mContactIconView.setAttributionDrawable(response.mAttributionLogo);
+            if (!TextUtils.isEmpty(response.mName)) {
+                mConversationNameView.setText(response.mName);
+            }
+            if (!TextUtils.isEmpty(response.mPhotoUrl)) {
+                mContactIconView.setImageUrl(response.mPhotoUrl);
+            }
+        }
+    }
+
 }
