@@ -15,6 +15,8 @@
  */
 package com.android.messaging.ui.conversation;
 
+import android.app.Activity;
+import android.app.DialogFragment;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.SharedPreferences;
@@ -23,10 +25,15 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBar;
+import android.telecom.TelecomManager;
+import android.telecom.PhoneAccountHandle;
+import android.telephony.TelephonyManager;
+import android.telephony.SmsManager;
 import android.text.Editable;
 import android.text.Html;
 import android.text.InputFilter;
 import android.text.InputFilter.LengthFilter;
+import android.text.InputType;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.AttributeSet;
@@ -38,6 +45,8 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+
+import com.android.contacts.common.widget.SelectPhoneAccountDialogFragment;
 
 import com.android.messaging.Factory;
 import com.android.messaging.R;
@@ -71,6 +80,8 @@ import com.android.messaging.util.MediaUtil;
 import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.UiUtils;
 import com.android.messaging.util.UnicodeFilter;
+
+import com.cyanogenmod.messaging.util.PrefsUtils;
 
 import java.util.Collection;
 import java.util.List;
@@ -200,6 +211,42 @@ public class ComposeMessageView extends LinearLayout
         mInputManager.onDetach();
     }
 
+    public interface OnSimSelectedCallback {
+        void onSimSelected(int subId);
+    }
+
+    /**
+     * display the sim select dialog for multi sim phones
+     */
+    private void showSimSelector(Activity activity, final OnSimSelectedCallback cb) {
+        final TelecomManager telecomMgr =
+                (TelecomManager) activity.getSystemService(Context.TELECOM_SERVICE);
+        final List<PhoneAccountHandle> handles = telecomMgr.getCallCapablePhoneAccounts();
+
+        final SelectPhoneAccountDialogFragment.SelectPhoneAccountListener listener =
+                new SelectPhoneAccountDialogFragment.SelectPhoneAccountListener() {
+                    @Override
+                    public void onPhoneAccountSelected(PhoneAccountHandle selectedAccountHandle,
+                                                       boolean setDefault) {
+                        cb.onSimSelected(Integer.valueOf(selectedAccountHandle.getId()));
+                    }
+                    @Override
+                    public void onDialogDismissed() {
+                    }
+                };
+
+        DialogFragment dialogFragment = SelectPhoneAccountDialogFragment.newInstance(
+                R.string.select_phone_account_title,
+                false /* canSetDefault */,
+                handles, listener);
+        dialogFragment.show(activity.getFragmentManager(), "SELECT_PHONE_ACCOUNT_DIALOG_FRAGMENT");
+    }
+
+    private boolean isSMSPromptEnabled() {
+        return (TelephonyManager.getDefault().getPhoneCount() > 1)  &&
+                SmsManager.getDefault().isSMSPromptEnabled();
+    }
+
     @Override
     protected void onFinishInflate() {
         mComposeEditText = (PlainTextEditText) findViewById(
@@ -229,6 +276,14 @@ public class ComposeMessageView extends LinearLayout
                 new LengthFilter(MmsConfig.get(ParticipantData.DEFAULT_SELF_SUB_ID)
                         .getMaxTextLimit()) });
 
+        if (PrefsUtils.isShowEmoticonsEnabled()) {
+            mComposeEditText.setInputType(mComposeEditText.getInputType()
+                    | InputType.TYPE_TEXT_VARIATION_SHORT_MESSAGE);
+        } else {
+            mComposeEditText.setInputType(mComposeEditText.getInputType()
+                    & ~InputType.TYPE_TEXT_VARIATION_SHORT_MESSAGE);
+        }
+
         mSelfSendIcon = (SimIconView) findViewById(R.id.self_send_icon);
         mSelfSendIcon.setOnClickListener(new OnClickListener() {
             @Override
@@ -251,6 +306,10 @@ public class ComposeMessageView extends LinearLayout
                 return true;
             }
         });
+
+        if (isSMSPromptEnabled()) {
+            mSelfSendIcon.setVisibility(INVISIBLE);
+        }
 
         mComposeSubjectText = (PlainTextEditText) findViewById(
                 R.id.compose_subject_text);
@@ -279,7 +338,25 @@ public class ComposeMessageView extends LinearLayout
         mSendButton.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(final View clickView) {
-                sendMessageInternal(true /* checkMessageSize */);
+
+                if (isSMSPromptEnabled()) {
+                    showSimSelector((Activity)mOriginalContext, new OnSimSelectedCallback() {
+                        @Override
+                        public void onSimSelected(int subId) {
+                            // subId is 1 based
+                            SubscriptionListEntry entry = getSubscriptionListEntry(subId-1);
+                            if (entry == null) {
+                                // shouldn't happen, but if it does, just send the message using the
+                                // old sim as opposed to crashing
+                                selectSim(entry);
+                            }
+                            sendMessageInternal(true /* checkMessageSize */);
+                        }
+                    });
+
+                } else {
+                    sendMessageInternal(true /* checkMessageSize */);
+                }
             }
         });
         mSendButton.setOnLongClickListener(new OnLongClickListener() {
@@ -641,6 +718,10 @@ public class ComposeMessageView extends LinearLayout
                 mBinding.getData().getSelfId(), false /* excludeDefault */);
     }
 
+    private SubscriptionListEntry getSubscriptionListEntry(int subId) {
+        return mConversationDataModel.getData().getSubscriptionEntry(subId);
+    }
+
     private boolean isDataLoadedForMessageSend() {
         // Check data loading prerequisites for sending a message.
         return mConversationDataModel != null && mConversationDataModel.isBound() &&
@@ -728,7 +809,7 @@ public class ComposeMessageView extends LinearLayout
             final SubscriptionListEntry subscriptionListEntry =
                     mConversationDataModel.getData().getSubscriptionEntryForSelfParticipant(
                             mBinding.getData().getSelfId(), false /* excludeDefault */);
-            if (subscriptionListEntry == null) {
+            if (subscriptionListEntry == null || isSMSPromptEnabled()) {
                 mComposeEditText.setHint(R.string.compose_message_view_hint_text);
             } else {
                 mComposeEditText.setHint(Html.fromHtml(getResources().getString(
