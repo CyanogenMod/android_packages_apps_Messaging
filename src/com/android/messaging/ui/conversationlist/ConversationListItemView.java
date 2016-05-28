@@ -386,7 +386,7 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
         // Reset lookup provider listener
         if (!TextUtils.isEmpty(mCurrentNumber)) {
             if (!ContactUtil.isValidContactId(mData.getParticipantContactId())) {
-                BugleApplication.getLookupProviderClient()
+                BugleApplication.getLookupProvider()
                         .removeLookupProviderListener(mCurrentNumber,
                                 this);
             }
@@ -491,9 +491,9 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
         mCurrentNumber = mData.getOtherParticipantNormalizedDestination();
 
         if (!ContactUtil.isValidContactId(mData.getParticipantContactId())) {
-            BugleApplication.getLookupProviderClient()
+            BugleApplication.getLookupProvider()
                     .addLookupProviderListener(mCurrentNumber, this);
-            BugleApplication.getLookupProviderClient().lookupInfoForPhoneNumber(mCurrentNumber);
+            BugleApplication.getLookupProvider().lookupInfoForPhoneNumber(mCurrentNumber);
         }
 
         mContactCheckmarkView.setVisibility(checkmarkVisiblity);
@@ -732,7 +732,7 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
         super.onDetachedFromWindow();
 
         if (!ContactUtil.isValidContactId(mData.getParticipantContactId())) {
-            BugleApplication.getLookupProviderClient().removeLookupProviderListener(
+            BugleApplication.getLookupProvider().removeLookupProviderListener(
                     mData.getOtherParticipantNormalizedDestination(), this);
         }
     }
