@@ -75,7 +75,7 @@ public abstract class PhoneUtils {
     private static final ArrayMap<String, ArrayMap<String, String>> sCanonicalPhoneNumberCache =
             new ArrayMap<>();
 
-    public static int sOverrideSendingSubId = -1;
+    public static int sOverrideSendingSubId = ParticipantData.DEFAULT_SELF_SUB_ID;
 
     public static int getOverrideSendingSubId() {
         return sOverrideSendingSubId;
@@ -564,6 +564,9 @@ public abstract class PhoneUtils {
             final int systemDefaultSubId = SmsManager.getDefaultSmsSubscriptionId();
             if (systemDefaultSubId < 0) {
                 // Always use -1 for any negative subId from system
+                return ParticipantData.DEFAULT_SELF_SUB_ID;
+            } else if (mSubscriptionManager.getSlotId(systemDefaultSubId) < 0) {
+                // Our default isn't inserted. Use the "select one" internal default.
                 return ParticipantData.DEFAULT_SELF_SUB_ID;
             }
             return systemDefaultSubId;
