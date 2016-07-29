@@ -72,6 +72,8 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
 
     private Configuration mCurrentConfig;
 
+    private Configuration mCurrentConfig;
+
     @VisibleForTesting
     protected static void setTestsRunning() {
         sRunningTests = true;
