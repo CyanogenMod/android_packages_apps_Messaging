@@ -21,9 +21,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
-import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.v7.mms.CarrierConfigValuesLoader;
@@ -31,9 +29,6 @@ import android.support.v7.mms.MmsManager;
 import android.telephony.CarrierConfigManager;
 
 import com.android.messaging.datamodel.DataModel;
-import com.android.messaging.datamodel.media.BugleMediaCacheManager;
-import com.android.messaging.datamodel.media.MediaCache;
-import com.android.messaging.datamodel.media.MediaCacheManager;
 import com.android.messaging.receiver.SmsReceiver;
 import com.android.messaging.sms.ApnDatabase;
 import com.android.messaging.sms.BugleApnSettingsLoader;
@@ -49,10 +44,6 @@ import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
 import com.android.messaging.util.Trace;
-import com.android.messaging.util.BlacklistObserver;
-import com.android.messaging.util.BlacklistSync;
-import com.cyanogenmod.messaging.lookup.ILookupClient;
-import com.cyanogenmod.messaging.lookup.LookupProviderManager;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
@@ -66,11 +57,6 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
 
     private UncaughtExceptionHandler sSystemUncaughtExceptionHandler;
     private static boolean sRunningTests = false;
-
-    // Lookup provider members
-    private static LookupProviderManager sLookupProviderManager;
-
-    private Configuration mCurrentConfig;
 
     @VisibleForTesting
     protected static void setTestsRunning() {
@@ -97,23 +83,9 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
             LogUtil.e(TAG, "BugleApplication.onCreate: FactoryImpl.register skipped for test run");
         }
 
-        BlacklistObserver observer = new BlacklistObserver(new Handler(), this);
-        // TODO - need to extract URI from TelephonyProvider
-        Uri CONTENT_URI = Uri.parse("content://blacklist");
-        getContentResolver().registerContentObserver(CONTENT_URI, true, observer);
-
-        BlacklistSync blacklistSync = new BlacklistSync(getApplicationContext());
-        blacklistSync.execute();
-
-        mCurrentConfig = new Configuration(getResources().getConfiguration());
-
-
         sSystemUncaughtExceptionHandler = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler(this);
-
-
         Trace.endSection();
-        sLookupProviderManager = new LookupProviderManager(this);
     }
 
     @Override
@@ -123,14 +95,6 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
         // Update conversation drawables when changing writing systems
         // (Right-To-Left / Left-To-Right)
         ConversationDrawables.get().updateDrawables();
-
-        // Clear avatar image cache on theme change
-        int changed = mCurrentConfig.updateFrom(newConfig);
-        if ((changed & ActivityInfo.CONFIG_THEME_RESOURCE) != 0) {
-            MediaCache<?> avatarCache = MediaCacheManager.get()
-                    .getOrCreateMediaCacheById(BugleMediaCacheManager.AVATAR_IMAGE_CACHE);
-            avatarCache.destroy();
-        }
     }
 
     // Called by the "real" factory from FactoryImpl.register() (i.e. not run in tests)
@@ -214,7 +178,6 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
             LogUtil.d(TAG, "BugleApplication.onLowMemory");
         }
         Factory.get().reclaimMemory();
-        sLookupProviderManager.onLowMemory();
     }
 
     @Override
@@ -295,29 +258,5 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
             LogUtil.e(LogUtil.BUGLE_TAG, "Shared prefs downgrade requested and ignored. " +
                     "oldVersion = " + existingVersion + ", newVersion = " + targetVersion);
         }
-    }
-
-    /**
-     * Get the reference to the lookup provider manager
-     *
-     * @return {@link ILookupClient} or null
-     */
-    public static ILookupClient getLookupProvider() {
-        return sLookupProviderManager;
-    }
-
-    /**
-     * Notify the provider that you would like to use it. Must be followed by
-     * {@link #releaseLookupProvider()} when you are finished, so client can clean up.
-     */
-    public static void acquireLookupProvider() {
-        sLookupProviderManager.onConsumerActivated();
-    }
-
-    /**
-     * Notify the provider that you are finished using it.
-     */
-    public static void releaseLookupProvider() {
-        sLookupProviderManager.onConsumerDeactivated();
     }
 }

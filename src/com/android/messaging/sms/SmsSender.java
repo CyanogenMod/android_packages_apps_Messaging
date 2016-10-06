@@ -24,7 +24,6 @@ import android.net.Uri;
 import android.os.SystemClock;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.SmsManager;
-import android.telephony.SubscriptionManager;
 import android.text.TextUtils;
 
 import com.android.messaging.Factory;
@@ -36,7 +35,6 @@ import com.android.messaging.util.BugleGservicesKeys;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.PhoneUtils;
 import com.android.messaging.util.UiUtils;
-import com.cyanogenmod.messaging.util.PrefsUtils;
 
 import java.util.ArrayList;
 import java.util.Random;
@@ -68,7 +66,6 @@ public class SmsSender {
 
     // Whether we should send multipart SMS as separate messages
     private static Boolean sSendMultipartSmsAsSeparateMessages = null;
-    private static int mPriority = 0;
 
     /**
      * Class that holds the sent status for all parts of a multipart message sending
@@ -299,15 +296,8 @@ public class SmsSender {
                             deliveryIntents.get(i));
                 }
             } else {
-                   int validityPeriod = PrefsUtils.getValidityPeriod(SubscriptionManager.getPhoneId(subId));
-                  // Remove all attributes for CDMA international roaming.
-                  if (PhoneUtils.getDefault().isCDMAInternationalRoaming(subId)) {
-                      LogUtil.v(TAG, "sendMessage during CDMA international roaming.");
-                      validityPeriod = -1;
-                      mPriority = -1;
-                 }
                 smsManager.sendMultipartTextMessage(
-                        dest, serviceCenter, messages, sentIntents, deliveryIntents, mPriority, false, validityPeriod);
+                        dest, serviceCenter, messages, sentIntents, deliveryIntents);
             }
         } catch (final Exception e) {
             throw new SmsException("SmsSender: caught exception in sending " + e);

@@ -28,7 +28,6 @@ import com.android.messaging.annotation.VisibleForAnimation;
 import com.android.messaging.datamodel.data.ConversationMessageBubbleData;
 import com.android.messaging.datamodel.data.ConversationMessageData;
 import com.android.messaging.util.UiUtils;
-import com.cyanogenmod.messaging.quickmessage.QuickMessage;
 
 /**
  * Shows the message bubble for one conversation message. It is able to animate size changes
@@ -93,15 +92,6 @@ public class ConversationMessageBubbleView extends LinearLayout {
         if (mAnimator == null) {
             mMorphedWidth = 0;
         }
-    }
-
-    public void bind() {
-        mShouldAnimateWidthChange = false;
-        mMorphedWidth = 0;
-    }
-
-    public void bind(QuickMessage quickMessage) {
-        bind();
     }
 
     public void kickOffMorphAnimation(final int oldWidth, final int newWidth) {

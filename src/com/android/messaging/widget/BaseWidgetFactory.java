@@ -30,7 +30,6 @@ import android.text.style.StyleSpan;
 import android.widget.RemoteViews;
 import android.widget.RemoteViewsService;
 
-import com.android.messaging.BugleApplication;
 import com.android.messaging.R;
 import com.android.messaging.datamodel.media.AvatarGroupRequestDescriptor;
 import com.android.messaging.datamodel.media.AvatarRequestDescriptor;
@@ -38,7 +37,6 @@ import com.android.messaging.datamodel.media.ImageRequestDescriptor;
 import com.android.messaging.datamodel.media.ImageResource;
 import com.android.messaging.datamodel.media.MediaRequest;
 import com.android.messaging.datamodel.media.MediaResourceManager;
-import com.android.messaging.datamodel.media.UriImageRequestDescriptor;
 import com.android.messaging.util.AvatarUriUtil;
 import com.android.messaging.util.LogUtil;
 
@@ -81,7 +79,6 @@ abstract class BaseWidgetFactory implements RemoteViewsService.RemoteViewsFactor
         if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
             LogUtil.v(TAG, "onCreate");
         }
-        BugleApplication.acquireLookupProvider();
     }
 
     @Override
@@ -94,7 +91,6 @@ abstract class BaseWidgetFactory implements RemoteViewsService.RemoteViewsFactor
                 mCursor.close();
                 mCursor = null;
             }
-            BugleApplication.releaseLookupProvider();
         }
     }
 
@@ -170,23 +166,13 @@ abstract class BaseWidgetFactory implements RemoteViewsService.RemoteViewsFactor
     }
 
     protected Bitmap getAvatarBitmap(final Uri avatarUri) {
-        if (avatarUri == null) {
-            return null;
-        }
         final String avatarType = avatarUri == null ?
                 null : AvatarUriUtil.getAvatarType(avatarUri);
-
         ImageRequestDescriptor descriptor;
-        boolean isAvatarUri = AvatarUriUtil.isAvatarUri(avatarUri);
-        boolean isGroupAvatar = AvatarUriUtil.TYPE_GROUP_URI.equals(
-                AvatarUriUtil.getAvatarType(avatarUri));
-
-        if (isAvatarUri && isGroupAvatar) {
+        if (AvatarUriUtil.TYPE_GROUP_URI.equals(avatarType)) {
             descriptor = new AvatarGroupRequestDescriptor(avatarUri, mIconSize, mIconSize);
-        } else if (isAvatarUri) {
-            descriptor = new AvatarRequestDescriptor(avatarUri, mIconSize, mIconSize);
         } else {
-            descriptor = new UriImageRequestDescriptor(avatarUri, mIconSize, mIconSize, true, 0, 0);
+            descriptor = new AvatarRequestDescriptor(avatarUri, mIconSize, mIconSize);
         }
 
         final MediaRequest<ImageResource> imageRequest =

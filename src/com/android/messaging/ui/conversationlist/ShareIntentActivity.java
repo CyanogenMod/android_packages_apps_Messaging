@@ -34,13 +34,13 @@ import com.android.messaging.util.Assert;
 import com.android.messaging.util.ContentType;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.MediaMetadataRetrieverWrapper;
+import com.android.messaging.util.FileUtil;
 
 import java.io.IOException;
 import java.util.ArrayList;
 
 public class ShareIntentActivity extends BaseBugleActivity implements
         ShareIntentFragment.HostInterface {
-    private static final String EXTRA_SMS_BODY = "sms_body";
 
     private MessageData mDraftMessage;
 
@@ -82,12 +82,7 @@ public class ShareIntentActivity extends BaseBugleActivity implements
                         contentUri, intent.getType(), contentType));
             }
             if (ContentType.TEXT_PLAIN.equals(contentType)) {
-                // Text could be stored in either key. Try both.
-                String sharedText = intent.getStringExtra(EXTRA_SMS_BODY);
-                if (TextUtils.isEmpty(sharedText)) {
-                    sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
-                }
-
+                final String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
                 if (sharedText != null) {
                     mDraftMessage = MessageData.createSharedMessage(sharedText);
                 } else {
@@ -164,8 +159,12 @@ public class ShareIntentActivity extends BaseBugleActivity implements
     }
 
     private void addSharedImagePartToDraft(final String contentType, final Uri imageUri) {
-        mDraftMessage.addPart(PendingAttachmentData.createPendingAttachmentData(contentType,
-                imageUri));
+        if (FileUtil.isInPrivateDir(imageUri)) {
+            Assert.fail("Cannot send private file " + imageUri.toString());
+        } else {
+            mDraftMessage.addPart(PendingAttachmentData.createPendingAttachmentData(contentType,
+                    imageUri));
+        }
     }
 
     @Override

@@ -49,17 +49,6 @@
             android:importantForAccessibility="no"
             android:contentDescription="@null" />
         <ImageView
-            android:id="@+id/attribution_logo"
-            android:layout_width="@dimen/attribution_logo_size"
-            android:layout_height="@dimen/attribution_logo_size"
-            android:src="@null"
-            android:layout_gravity="bottom|right"
-            android:layout_marginRight="@dimen/convo_attribution_logo_marginRight"
-            android:layout_marginBottom="@dimen/convo_attribution_logo_marginBottom"
-            android:visibility="gone"
-            android:importantForAccessibility="no"
-            android:contentDescription="@null"/>
-        <ImageView
             android:id="@+id/conversation_failed_status_icon"
             style="@style/WidgetConversationItemFailed"
             android:layout_width="wrap_content"

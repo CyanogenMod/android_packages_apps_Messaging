@@ -18,8 +18,6 @@ include $(CLEAR_VARS)
 LOCAL_MODULE_TAGS := optional
 
 LOCAL_SRC_FILES := $(call all-java-files-under, src)
-LOCAL_SRC_FILES += $(call all-java-files-under, ../ContactsCommon/src)
-LOCAL_SRC_FILES += $(call all-java-files-under, ../PhoneCommon/src)
 
 LOCAL_RESOURCE_DIR := $(LOCAL_PATH)/res
 ifeq ($(TARGET_BUILD_APPS),)
@@ -33,11 +31,6 @@ LOCAL_RESOURCE_DIR += frameworks/opt/chips/res
 LOCAL_RESOURCE_DIR += frameworks/opt/colorpicker/res
 LOCAL_RESOURCE_DIR += frameworks/opt/photoviewer/res
 LOCAL_RESOURCE_DIR += frameworks/opt/photoviewer/activity/res
-LOCAL_RESOURCE_DIR += packages/apps/ContactsCommon/res
-LOCAL_RESOURCE_DIR += packages/apps/PhoneCommon/res
-
-LOCAL_JAVA_LIBRARIES += telephony-common \
-    ims-common
 
 LOCAL_STATIC_JAVA_LIBRARIES := android-common
 LOCAL_STATIC_JAVA_LIBRARIES += android-common-framesequence
@@ -51,15 +44,7 @@ LOCAL_STATIC_JAVA_LIBRARIES += guava
 LOCAL_STATIC_JAVA_LIBRARIES += libchips
 LOCAL_STATIC_JAVA_LIBRARIES += libphotoviewer
 LOCAL_STATIC_JAVA_LIBRARIES += libphonenumber
-LOCAL_STATIC_JAVA_LIBRARIES += play
 LOCAL_STATIC_JAVA_LIBRARIES += colorpicker
-LOCAL_STATIC_JAVA_LIBRARIES += libSudaSdk
-LOCAL_STATIC_JAVA_LIBRARIES += libSudaPinYin
-LOCAL_STATIC_JAVA_LIBRARIES += libOkHttp
-LOCAL_STATIC_JAVA_LIBRARIES += libOKIO
-
-
-LOCAL_STATIC_JAVA_LIBRARIES += contacts-picaso
 
 include $(LOCAL_PATH)/version.mk
 
@@ -72,18 +57,12 @@ LOCAL_AAPT_FLAGS += --extra-packages com.android.ex.chips
 LOCAL_AAPT_FLAGS += --extra-packages com.android.vcard
 LOCAL_AAPT_FLAGS += --extra-packages com.android.ex.photo
 LOCAL_AAPT_FLAGS += --extra-packages com.android.colorpicker
-LOCAL_AAPT_FLAGS += --extra-packages com.android.contacts.common
-LOCAL_AAPT_FLAGS += --extra-packages com.android.phone.common
-LOCAT_AAPT_FLAGS += --extra-packages com.google.android.gms
 
 ifdef TARGET_BUILD_APPS
     LOCAL_JNI_SHARED_LIBRARIES := libframesequence libgiftranscode
 else
     LOCAL_REQUIRED_MODULES:= libframesequence libgiftranscode
 endif
-
-# utilize ContactsCommon's phone-number-based contact-info lookup
-include $(LOCAL_PATH)/../ContactsCommon/info_lookup/phonenumber_lookup_provider.mk
 
 LOCAL_PROGUARD_FLAGS := -ignorewarnings -include build/core/proguard_basic_keeps.flags
 
@@ -96,14 +75,11 @@ else
     LOCAL_PROGUARD_FLAG_FILES += proguard-release.flags
 endif
 
-LOCAL_JACK_ENABLED := disabled
-
 LOCAL_PACKAGE_NAME := messaging
 
 LOCAL_CERTIFICATE := platform
 
-# Causes build errors with ContactsCommon
-#LOCAL_SDK_VERSION := current
+LOCAL_SDK_VERSION := current
 
 include $(BUILD_PACKAGE)
 

@@ -23,7 +23,7 @@
 }
 
 # Keep methods that have the @VisibleForAnimation annotation
--keep @interface com.android.messaging.annotation.VisibleForAnimation
+-keep interface com.android.messaging.annotation.VisibleForAnimation
 -keepclassmembers class * {
   @com.android.messaging.annotation.VisibleForAnimation *;
 }
@@ -56,8 +56,3 @@
 -keepclassmembers class **.R$* {
     public static <fields>;
 }
-
-
--dontwarn com.squareup.picasso.**
-
--dontoptimize

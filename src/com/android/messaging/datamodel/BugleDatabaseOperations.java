@@ -25,9 +25,7 @@ import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.support.v4.util.ArrayMap;
 import android.support.v4.util.SimpleArrayMap;
-import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
-import com.android.internal.telephony.util.BlacklistUtils;
 
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.DatabaseHelper.ConversationColumns;
@@ -50,7 +48,6 @@ import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
 import com.android.messaging.util.UriUtil;
-import com.android.messaging.util.BlacklistSync;
 import com.android.messaging.widget.WidgetConversationProvider;
 import com.google.common.annotations.VisibleForTesting;
 
@@ -1771,46 +1768,16 @@ public class BugleDatabaseOperations {
     }
 
     @DoesNotRunOnMainThread
-    public static int updateDestination(final DatabaseWrapper dbWrapper,
-             final String destination, final boolean blocked) {
-        // by default, the framework DB is updated
-        int updateCount;
-        updateCount = updateDestination(dbWrapper, destination, blocked, true);
-        return updateCount;
-    }
-
-    @DoesNotRunOnMainThread
-    public static void resetBlockedParticpants(DatabaseWrapper dbWrapper) {
-        Assert.isNotMainThread();
-        final ContentValues values = new ContentValues();
-        values.put(ParticipantColumns.BLOCKED, false);
-        dbWrapper.update(DatabaseHelper.PARTICIPANTS_TABLE, values,
-                ParticipantColumns.BLOCKED + "=?",
-                new String[] {"1"});
-    }
-
-    @DoesNotRunOnMainThread
-    public static int updateDestination(final DatabaseWrapper dbWrapper,
-            final String destination, final boolean blocked, final boolean frameworkDb) {
+    public static void updateDestination(final DatabaseWrapper dbWrapper,
+            final String destination, final boolean blocked) {
         Assert.isNotMainThread();
         final ContentValues values = new ContentValues();
         values.put(ParticipantColumns.BLOCKED, blocked ? 1 : 0);
-        int updateCount = dbWrapper.update(DatabaseHelper.PARTICIPANTS_TABLE, values,
+        dbWrapper.update(DatabaseHelper.PARTICIPANTS_TABLE, values,
                 ParticipantColumns.NORMALIZED_DESTINATION + "=? AND " +
                         ParticipantColumns.SUB_ID + "=?",
                 new String[] { destination, Integer.toString(
                         ParticipantData.OTHER_THAN_SELF_SUB_ID) });
-
-        // update framework database in addition to the local database
-        if (frameworkDb) {
-            // update the framework database with the blacklisting information
-            String nn = PhoneNumberUtils.normalizeNumber(destination);
-            BlacklistUtils.addOrUpdate(dbWrapper.getContext(), nn,
-                    blocked ? (BlacklistUtils.BLOCK_MESSAGES | BlacklistUtils.BLOCK_CALLS) : 0,
-                    BlacklistUtils.BLOCK_MESSAGES | BlacklistUtils.BLOCK_CALLS);
-        }
-
-        return updateCount;
     }
 
     @DoesNotRunOnMainThread
@@ -1948,68 +1915,5 @@ public class BugleDatabaseOperations {
         }
         Assert.inRange(count, 0, 1);
         return (count >= 0);
-    }
-
-    @DoesNotRunOnMainThread
-    public static boolean deleteConversationByProtocol(final DatabaseWrapper dbWrapper,
-            final String conversationId, final long cutoffTimestamp, final int protocol) {
-        if (protocol != MessageData.PROTOCOL_SMS && protocol != MessageData.PROTOCOL_MMS) {
-            return false;
-        }
-
-        Assert.isNotMainThread();
-        dbWrapper.beginTransaction();
-        boolean conversationDeleted = false;
-        boolean conversationMessagesDeleted;
-        try {
-            // Delete all messages prior to the cutoff
-            dbWrapper.delete(DatabaseHelper.MESSAGES_TABLE,
-                    MessageColumns.CONVERSATION_ID + "=? AND "
-                            + MessageColumns.RECEIVED_TIMESTAMP + "<=? AND "
-                            + MessageColumns.PROTOCOL + "=?",
-                    new String[] { conversationId, Long.toString(cutoffTimestamp),
-                            Integer.toString(protocol) });
-            // Check to see if there are any messages left in the conversation
-            final long count = dbWrapper.queryNumEntries(DatabaseHelper.MESSAGES_TABLE,
-                    MessageColumns.CONVERSATION_ID + "=?", new String[] { conversationId });
-            conversationMessagesDeleted = (count <= 0);
-
-            if (conversationMessagesDeleted) {
-                // Delete conversation row
-                final int conversationCount = dbWrapper.delete(DatabaseHelper.CONVERSATIONS_TABLE,
-                        ConversationColumns._ID + "=?", new String[] { conversationId });
-                conversationDeleted = (conversationCount > 0);
-            }
-            dbWrapper.setTransactionSuccessful();
-        } finally {
-            dbWrapper.endTransaction();
-        }
-        return conversationDeleted;
-    }
-
-    public static long getCutOffTimeStampFromLimit(final String conversationId,
-            final int maxLimit, final int protocol) {
-        final DatabaseWrapper db = DataModel.get().getDatabase();
-        db.beginTransaction();
-        Cursor cursor = null;
-        Long cutoffTimeStamp = Long.MIN_VALUE;
-        try {
-            cursor = db.query(DatabaseHelper.MESSAGES_TABLE,
-                    new String[]{ MessageColumns.RECEIVED_TIMESTAMP },
-                    MessageColumns.CONVERSATION_ID + "=? AND " + MessageColumns.PROTOCOL + "=?",
-                    new String[]{ conversationId, Integer.toString(protocol) }, null, null,
-                    MessageColumns.RECEIVED_TIMESTAMP + " DESC", null);
-            if (cursor != null && cursor.getCount() > maxLimit) {
-                cursor.moveToPosition(maxLimit);
-                cutoffTimeStamp = cursor.getLong(0);
-            }
-            db.setTransactionSuccessful();
-        } finally {
-            db.endTransaction();
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-        return cutoffTimeStamp;
     }
 }

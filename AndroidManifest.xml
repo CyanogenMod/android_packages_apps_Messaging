@@ -18,7 +18,7 @@
     package="com.android.messaging"
     android:installLocation="internalOnly">
 
-    <uses-sdk android:minSdkVersion="19" android:targetSdkVersion="23" />
+    <uses-sdk android:minSdkVersion="19" android:targetSdkVersion="24" />
 
     <!-- Application holds CPU wakelock while working in background -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -48,15 +48,6 @@
     <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <uses-permission android:name="android.permission.READ_PHONE_BLACKLIST" />
-    <uses-permission android:name="android.permission.CHANGE_PHONE_BLACKLIST" />
-
-    <uses-permission android:name="com.cyanogen.ambient.permission.BIND_CALLER_INFO" />
-    <uses-permission android:name="com.cyanogen.ambient.permission.BIND_RIDEINPROGRESS_SERVICE" />
-    <uses-permission android:name="com.cyanogen.ambient.permission.BIND_RIDESHARING_SERVICE" />
-
-    <uses-permission android:name="android.permission.BIND_JOB_SERVICE" />
-
     <!--  Optional features -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
@@ -67,7 +58,7 @@
     <application
         android:name="com.android.messaging.BugleApplication"
         android:allowBackup="false"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/BugleTheme"
         android:supportsRtl="true">
@@ -360,10 +351,6 @@
             </intent-filter>
         </receiver>
 
-        <receiver
-            android:name=".receiver.CopyCaptchasReceiver"
-            android:exported="true" />
-
         <!-- Intents for aborting SMS/MMS broadcasts pre-KLP -->
         <!-- Registered for a priority just ahead of inbox Messaging apps (2) -->
         <receiver android:name=".receiver.AbortMmsWapPushReceiver"
@@ -437,7 +424,7 @@
         </activity>
 
         <activity android:name=".ui.SmsStorageLowWarningActivity"
-                  android:theme="@style/InvisibleNoDisplay"
+                  android:theme="@style/Invisible"
                   android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <activity android:name=".ui.appsettings.ApnSettingsActivity"
@@ -532,39 +519,6 @@
         </activity>
 
         <service android:name="android.support.v7.mms.MmsService"/>
-
-        <!-- QuickMessage support -->
-        <!-- This is the "QuickMessage" panel, which has special
-             launch behaviour.  We clear its task affinity, so it will not
-             be associated with the main messaging task and if launched
-             from a notification will not bring the rest of the messaging app
-             to the foreground.We exclude from recent apps since this is accessible
-             through a notification when appropriate. -->
-         <activity
-            android:name="com.cyanogenmod.messaging.quickmessage.QuickMessagePopup"
-            android:theme="@style/BugleTheme.QMPopUp"
-            android:configChanges="orientation|screenSize"
-            android:launchMode="singleTop"
-            android:taskAffinity=""
-            android:excludeFromRecents="true"
-            android:exported="true" />
-
-        <receiver android:name="com.cyanogenmod.messaging.quickmessage.ClearAllReceiver" />
-
-        <receiver android:name="com.cyanogenmod.messaging.lookup.LookupProviderManager" />
-
-        <activity android:name=".ui.ManageSimMessages"
-                  android:theme="@style/BugleTheme"
-                  android:launchMode="singleTop"
-                  android:configChanges="orientation|screenSize|keyboardHidden"
-                  android:label="@string/sim_manage_messages_title" />
-
-        <meta-data android:name="com.cyanogen.ambient.analytics.key"
-                   android:value="6l2dXt9DFioFa1Mfb4eZsM9l87Rl9hp1UL75tO9w"/>
-
-        <service android:name="com.cyanogenmod.messaging.util.MetricsJob"
-                 android:permission="android.permission.BIND_JOB_SERVICE" />
-
     </application>
 
 </manifest>

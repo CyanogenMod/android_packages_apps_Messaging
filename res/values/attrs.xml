@@ -58,7 +58,4 @@
         </attr>
     </declare-styleable>
     <attr name="apnPreferenceStyle" format="reference" />
-    <declare-styleable name="MessageBubbleBackground">
-        <attr name="snapWidthPixels" format="dimension|reference" />
-    </declare-styleable>
 </resources>

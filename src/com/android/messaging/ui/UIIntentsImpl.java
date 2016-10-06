@@ -263,11 +263,9 @@ public class UIIntentsImpl extends UIIntents {
     }
 
     @Override
-    public void launchClassZeroActivity(final Context context, final ContentValues messageValues,
-        boolean isReplaceable) {
+    public void launchClassZeroActivity(final Context context, final ContentValues messageValues) {
         final Intent classZeroIntent = new Intent(context, ClassZeroActivity.class)
                 .putExtra(UI_INTENT_EXTRA_MESSAGE_VALUES, messageValues)
-                .putExtra(UI_INTENT_EXTRA_MESSAGE_REPLACEABLE, isReplaceable)
                 .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
         context.startActivity(classZeroIntent);
     }

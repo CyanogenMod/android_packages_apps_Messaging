@@ -192,7 +192,6 @@ class SyncMessageBatch {
                     + message.getReceivedTimeStamp());
         }
 
-        MessageRecyclerAction.deleteMessagesOverLimit(conversationId, MessageData.PROTOCOL_SMS);
         // Keep track of updated conversation for later updating the conversation snippet, etc.
         mConversationsToUpdate.add(conversationId);
     }
@@ -282,7 +281,7 @@ class SyncMessageBatch {
                     + " for MMS " + message.getSmsMessageUri() + " received at "
                     + message.getReceivedTimeStamp());
         }
-        MessageRecyclerAction.deleteMessagesOverLimit(conversationId, MessageData.PROTOCOL_MMS);
+
         // Keep track of updated conversation for later updating the conversation snippet, etc.
         mConversationsToUpdate.add(conversationId);
     }

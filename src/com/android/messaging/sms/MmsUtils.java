@@ -26,13 +26,11 @@ import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
-import android.database.DatabaseUtils;
 import android.media.MediaMetadataRetriever;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.BaseColumns;
 import android.provider.Settings;
 import android.provider.Telephony;
 import android.provider.Telephony.Mms;
@@ -40,24 +38,18 @@ import android.provider.Telephony.Sms;
 import android.provider.Telephony.Threads;
 import android.telephony.SmsManager;
 import android.telephony.SmsMessage;
-import android.telephony.SubscriptionManager;
 import android.text.TextUtils;
 import android.text.util.Rfc822Token;
 import android.text.util.Rfc822Tokenizer;
 
 import com.android.messaging.Factory;
 import com.android.messaging.R;
-import com.android.messaging.datamodel.BugleDatabaseOperations;
-import com.android.messaging.datamodel.DataModel;
 import com.android.messaging.datamodel.MediaScratchFileProvider;
 import com.android.messaging.datamodel.action.DownloadMmsAction;
 import com.android.messaging.datamodel.action.SendMessageAction;
 import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.datamodel.data.MessagePartData;
 import com.android.messaging.datamodel.data.ParticipantData;
-import com.android.messaging.datamodel.DatabaseHelper;
-import com.android.messaging.datamodel.DatabaseWrapper;
-import com.android.messaging.datamodel.MessagingContentProvider;
 import com.android.messaging.mmslib.InvalidHeaderValueException;
 import com.android.messaging.mmslib.MmsException;
 import com.android.messaging.mmslib.SqliteWrapper;
@@ -65,8 +57,6 @@ import com.android.messaging.mmslib.pdu.CharacterSets;
 import com.android.messaging.mmslib.pdu.EncodedStringValue;
 import com.android.messaging.mmslib.pdu.GenericPdu;
 import com.android.messaging.mmslib.pdu.NotificationInd;
-import com.android.messaging.mmslib.pdu.ReadOrigInd;
-import com.android.messaging.mmslib.pdu.DeliveryInd;
 import com.android.messaging.mmslib.pdu.PduBody;
 import com.android.messaging.mmslib.pdu.PduComposer;
 import com.android.messaging.mmslib.pdu.PduHeaders;
@@ -107,8 +97,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
-
-import android.util.Log;
 
 /**
  * Utils for sending sms/mms messages.
@@ -1395,76 +1383,6 @@ public class MmsUtils {
         return deleted;
     }
 
-    public static int deleteMessagesOlderThanByProtocol(final long cutOffTimestampInMillis,
-            final int protocol) {
-        Uri uri;
-        String selectionSql;
-        String dateField;
-        long cutOffTimeStamp = Long.MIN_VALUE;
-
-        switch (protocol) {
-            case MessageData.PROTOCOL_SMS:
-                uri = Sms.CONTENT_URI;
-                selectionSql = getSmsTypeSelectionSql();
-                cutOffTimeStamp = cutOffTimestampInMillis;
-                dateField = Sms.DATE;
-                break;
-            case MessageData.PROTOCOL_MMS:
-                uri = Mms.CONTENT_URI;
-                selectionSql = getMmsTypeSelectionSql();
-                cutOffTimeStamp = cutOffTimestampInMillis / 1000L;
-                dateField = Mms.DATE;
-                break;
-            default:
-                return 0;
-        }
-        final ContentResolver resolver =
-                Factory.get().getApplicationContext().getContentResolver();
-        final String selection = String.format(
-                Locale.US,
-                "%s AND (%s<=%d)",
-                selectionSql,
-                dateField,
-                cutOffTimeStamp);
-        int deleted = resolver.delete(uri, selection, null);
-
-        return deleted;
-    }
-
-    public static void sendMmsReadReport(final long threadId, final int status) {
-        final Context context = Factory.get().getApplicationContext();
-        final DatabaseWrapper db = DataModel.get().getDatabase();
-        List<String> recipients = null;
-        String selection = Mms.MESSAGE_TYPE + " = " + PduHeaders.MESSAGE_TYPE_RETRIEVE_CONF
-            + " AND " + Mms.READ + " = 0"
-            + " AND " + Mms.READ_REPORT + " = " + PduHeaders.VALUE_YES
-            + " AND " + Mms.THREAD_ID + " = ?";
-
-        if (threadId != -1) {
-            recipients = MmsUtils.getRecipientsByThread(threadId);
-        }
-
-        final String[] projection = new String[] { Mms._ID, Mms.MESSAGE_ID, Mms.SUBSCRIPTION_ID  };
-        final Cursor c = SqliteWrapper.query(context, context.getContentResolver(),
-                Mms.Inbox.CONTENT_URI, projection, selection,
-                new String[]{String.valueOf(threadId)}, null);
-        if (c == null) {
-            return;
-        }
-        try {
-            while (c.moveToNext()) {
-                Uri uri = ContentUris.withAppendedId(Mms.CONTENT_URI, c.getLong(0));
-                String from = MmsUtils.getMmsSender(recipients, uri.toString());
-                final ParticipantData self = BugleDatabaseOperations.getOrCreateSelf(db, c.getInt(2));
-                MmsSender.sendReadReceipt(context, from, c.getInt(2),
-                        self.getNormalizedDestination(), c.getString(1), status);
-            }
-        } finally {
-            c.close();
-        }
-
-    }
-
     /**
      * Update the read status of SMS/MMS messages by thread and timestamp
      *
@@ -2361,79 +2279,24 @@ public class MmsUtils {
         final int type = pdu.getMessageType();
 
         Uri messageUri = null;
-        long threadId = -1;
         switch (type) {
             case PduHeaders.MESSAGE_TYPE_DELIVERY_IND:
             case PduHeaders.MESSAGE_TYPE_READ_ORIG_IND: {
-                long localId = -1;
-                //Update Telephony DB
-                Cursor cursor = getCursorFromMessageId(context, pdu, type);
-                if (cursor != null) {
-                    try {
-                        if ((cursor.getCount() == 1) && cursor.moveToFirst()) {
-                            threadId = cursor.getLong(cursor.getColumnIndex(Mms.THREAD_ID));
-                            localId = cursor.getLong(cursor.getColumnIndex(BaseColumns._ID));
-                        }
-                    } finally {
-                        cursor.close();
-                    }
-                }
-                if (threadId == -1 || localId == -1) {
-                    // The associated SendReq isn't found, therefore skip
-                    // processing this PDU.
-                    break;
-                }
-                Uri inboxUri = null;
-                try {
-                    inboxUri = p.persist(pdu, Mms.Inbox.CONTENT_URI, subId, subPhoneNumber,
-                            null);
-                    // Update thread ID for DeliveryInd.
-                    ContentValues values = new ContentValues(1);
-                    values.put(Mms.THREAD_ID, threadId);
-                    SqliteWrapper.update(context, context.getContentResolver(), inboxUri, values,
-                            null, null);
-                } catch (final MmsException e) {
-                    LogUtil.e(TAG, "Failed to save the data from PUSH: type=" + type, e);
-                }
-                // Update local message
-                final DatabaseWrapper db = DataModel.get().getDatabase();
-                db.beginTransaction();
-                try {
-                    int status = 0;
-                    if (type == PduHeaders.MESSAGE_TYPE_DELIVERY_IND) {
-                        status = ((DeliveryInd) pdu).getStatus();
-                        if (status == PduHeaders.STATUS_RETRIEVED ||
-                                status == PduHeaders.STATUS_FORWARDED) {
-                            status = MessageData.BUGLE_STATUS_OUTGOING_DELIVERED;
-                        }
-                    } else {
-                        status = ((ReadOrigInd) pdu).getReadStatus();
-                        if (status == PduHeaders.READ_STATUS_READ) {
-                            status = MessageData.BUGLE_STATUS_OUTGOING_COMPLETE_AND_READ;
-                        }
-                    }
-                    if (status == MessageData.BUGLE_STATUS_OUTGOING_DELIVERED ||
-                            status == MessageData.BUGLE_STATUS_OUTGOING_COMPLETE_AND_READ) {
-                        final ContentValues values = new ContentValues();
-                        values.put(DatabaseHelper.MessageColumns.STATUS, status);
-                        Uri mUri = Uri.withAppendedPath(Mms.CONTENT_URI, String.valueOf(localId));
-                        final MessageData messageData =
-                                BugleDatabaseOperations.readMessageData(db, mUri);
-                        // Check the message was not removed before the delivery report comes in
-                        if (messageData != null) {
-                            LogUtil.e(TAG, "Check for URI path : " + mUri.equals(
-                                    messageData.getSmsMessageUri()));
-                            // Row must exist as was just loaded above (on ActionService thread)
-                            BugleDatabaseOperations.updateMessageRow(db, messageData.getMessageId(),
-                                    values);
-                            MessagingContentProvider.notifyMessagesChanged(
-                                    messageData.getConversationId());
-                        }
-                    }
-                    db.setTransactionSuccessful();
-                } finally {
-                    db.endTransaction();
-                }
+                // TODO: Should this be commented out?
+//                threadId = findThreadId(context, pdu, type);
+//                if (threadId == -1) {
+//                    // The associated SendReq isn't found, therefore skip
+//                    // processing this PDU.
+//                    break;
+//                }
+
+//                Uri uri = p.persist(pdu, Inbox.CONTENT_URI, true,
+//                        MessagingPreferenceActivity.getIsGroupMmsEnabled(mContext), null);
+//                // Update thread ID for ReadOrigInd & DeliveryInd.
+//                ContentValues values = new ContentValues(1);
+//                values.put(Mms.THREAD_ID, threadId);
+//                SqliteWrapper.update(mContext, cr, uri, values, null, null);
+                LogUtil.w(TAG, "Received unsupported WAP Push, type=" + type);
                 break;
             }
             case PduHeaders.MESSAGE_TYPE_NOTIFICATION_IND: {
@@ -2501,39 +2364,15 @@ public class MmsUtils {
         return mms;
     }
 
-    private static Cursor getCursorFromMessageId(Context context, GenericPdu pdu, int type) {
-        String messageId;
-        if (type == PduHeaders.MESSAGE_TYPE_DELIVERY_IND) {
-            messageId = new String(((DeliveryInd) pdu).getMessageId());
-        } else {
-            messageId = new String(((ReadOrigInd) pdu).getMessageId());
-        }
-        StringBuilder sb = new StringBuilder('(');
-        sb.append(Mms.MESSAGE_ID);
-        sb.append('=');
-        sb.append(DatabaseUtils.sqlEscapeString(messageId));
-        sb.append(" AND ");
-        sb.append(Mms.MESSAGE_TYPE);
-        sb.append('=');
-        sb.append(PduHeaders.MESSAGE_TYPE_SEND_REQ);
-        Cursor cursor = SqliteWrapper.query(context, context.getContentResolver(),
-                Mms.CONTENT_URI, new String[]{BaseColumns._ID, Mms.THREAD_ID},
-                sb.toString(), null, null);
-        return cursor;
-    }
-
     public static Uri insertSendingMmsMessage(final Context context, final List<String> recipients,
             final MessageData content, final int subId, final String subPhoneNumber,
             final long timestamp) {
-        final boolean requireDeliveryReport = isMmsDeliveryReportRequired(subId);
-        final boolean requireReadReport = isMmsReadReportRequired(subId);
-        final long expiryTime = getExpiryTime(subId);
         final SendReq sendReq = createMmsSendReq(
                 context, subId, recipients.toArray(new String[recipients.size()]), content,
-                requireDeliveryReport,
-                requireReadReport,
-                expiryTime,
-                getSendPriority(subId),
+                DEFAULT_DELIVERY_REPORT_MODE,
+                DEFAULT_READ_REPORT_MODE,
+                DEFAULT_EXPIRY_TIME_IN_SECONDS,
+                DEFAULT_PRIORITY,
                 timestamp);
         Uri messageUri = null;
         if (sendReq != null) {
@@ -2666,9 +2505,7 @@ public class MmsUtils {
         // Message class
         req.setMessageClass(PduHeaders.MESSAGE_CLASS_PERSONAL_STR.getBytes());
         // Expiry
-        if(expiryTime != -1) { // Set only if != -1 (MAX). For -1,  not calling setExpiry leads to use MAX as default.
-            req.setExpiry(expiryTime);
-        }
+        req.setExpiry(expiryTime);
         // Priority
         req.setPriority(priority);
         // Delivery report
@@ -2682,43 +2519,12 @@ public class MmsUtils {
         if (!MmsConfig.get(subId).getSMSDeliveryReportsEnabled()) {
             return false;
         }
-        final Resources res = Factory.get().getApplicationContext().getResources();
+        final Context context = Factory.get().getApplicationContext();
+        final Resources res = context.getResources();
         final BuglePrefs prefs = BuglePrefs.getSubscriptionPrefs(subId);
         final String deliveryReportKey = res.getString(R.string.delivery_reports_pref_key);
         final boolean defaultValue = res.getBoolean(R.bool.delivery_reports_pref_default);
         return prefs.getBoolean(deliveryReportKey, defaultValue);
-    }
-
-    private static boolean isMmsDeliveryReportRequired(final int subId) {
-        final Resources res = Factory.get().getApplicationContext().getResources();
-        final BuglePrefs prefs = BuglePrefs.getSubscriptionPrefs(subId);
-        final String mmsDeliveryReportKey = res.getString(R.string.delivery_reports_mms_pref_key);
-        final boolean defaultValue = res.getBoolean(R.bool.def_mms_delivery_reports);
-        return prefs.getBoolean(mmsDeliveryReportKey, defaultValue);
-    }
-
-    private static boolean isMmsReadReportRequired(final int subId) {
-        final Resources res = Factory.get().getApplicationContext().getResources();
-        final BuglePrefs prefs = BuglePrefs.getSubscriptionPrefs(subId);
-        final String readReportKey = res.getString(R.string.read_reports_mms_pref_key);
-        final boolean defaultValue = DEFAULT_READ_REPORT_MODE;
-        return prefs.getBoolean(readReportKey, defaultValue);
-    }
-
-    private static long getExpiryTime(final int subId) {
-        final Resources res = Factory.get().getApplicationContext().getResources();
-        final BuglePrefs prefs = BuglePrefs.getSubscriptionPrefs(subId);
-        final String expiryStr = res.getString(R.string.expiry_mms_pref_key);
-        final long expiryTime = Long.parseLong(prefs.getString(expiryStr, "0"));
-        return expiryTime != 0 ? expiryTime : DEFAULT_EXPIRY_TIME_IN_SECONDS;
-    }
-
-    private static int getSendPriority(final int subId){
-        final Resources res = Factory.get().getApplicationContext().getResources();
-        final BuglePrefs prefs = BuglePrefs.getSubscriptionPrefs(subId);
-        final String sendPriorityMmsKey = res.getString(R.string.priority_mms_pref_key);
-        String priority = prefs.getString(sendPriorityMmsKey, Integer.toString(DEFAULT_PRIORITY));
-        return Integer.parseInt(priority);
     }
 
     public static int sendSmsMessage(final String recipient, final String messageText,

@@ -454,5 +454,4 @@ public class AsyncImageView extends ImageView implements MediaResourceLoadListen
             }
         }
     }
-
 }

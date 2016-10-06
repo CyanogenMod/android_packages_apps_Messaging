@@ -228,12 +228,11 @@ public class AudioRecordView extends FrameLayout implements
         final GradientDrawable backgroundDrawable = ((GradientDrawable) getResources()
                 .getDrawable(R.drawable.audio_record_control_button_background));
         if (isRecording()) {
-            foregroundDrawable.setColorFilter(getResources().getColor(R.color.mic_recording_color),
-                    PorterDuff.Mode.SRC_ATOP);
+            foregroundDrawable.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP);
             backgroundDrawable.setColor(mThemeColor);
         } else {
             foregroundDrawable.setColorFilter(mThemeColor, PorterDuff.Mode.SRC_ATOP);
-            backgroundDrawable.setColor(getResources().getColor(R.color.mic_background_color));
+            backgroundDrawable.setColor(Color.WHITE);
         }
         mRecordButtonVisual.setImageDrawable(foregroundDrawable);
         mRecordButtonVisual.setBackground(backgroundDrawable);

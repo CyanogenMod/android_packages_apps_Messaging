@@ -28,7 +28,6 @@ import com.android.messaging.ui.CursorRecyclerAdapter;
 import com.android.messaging.ui.AsyncImageView.AsyncImageViewDelayLoader;
 import com.android.messaging.ui.conversation.ConversationMessageView.ConversationMessageViewHost;
 import com.android.messaging.util.Assert;
-import com.cyanogenmod.messaging.util.RidesharingUtil;
 
 import java.util.HashSet;
 import java.util.List;
@@ -41,13 +40,11 @@ public class ConversationMessageAdapter extends
     CursorRecyclerAdapter<ConversationMessageAdapter.ConversationMessageViewHolder> {
 
     private final ConversationMessageViewHost mHost;
-    private final RidesharingUtil mRidesharingUtil;
     private final AsyncImageViewDelayLoader mImageViewDelayLoader;
     private final View.OnClickListener mViewClickListener;
     private final View.OnLongClickListener mViewLongClickListener;
     private boolean mOneOnOne;
     private String mSelectedMessageId;
-    private boolean isSmsMessage;
 
     public ConversationMessageAdapter(final Context context, final Cursor cursor,
         final ConversationMessageViewHost host,
@@ -56,23 +53,11 @@ public class ConversationMessageAdapter extends
         final View.OnLongClickListener longClickListener) {
         super(context, cursor, 0);
         mHost = host;
-        mRidesharingUtil = new RidesharingUtil(context);
         mViewClickListener = viewClickListener;
         mViewLongClickListener = longClickListener;
         mImageViewDelayLoader = imageViewDelayLoader;
         setHasStableIds(true);
     }
-
-    public ConversationMessageAdapter(final Context context, final Cursor cursor,
-            final ConversationMessageViewHost host,
-            final AsyncImageViewDelayLoader imageViewDelayLoader,
-            final View.OnClickListener viewClickListener,
-            final View.OnLongClickListener longClickListener, boolean isSmsMessage) {
-        this(context, cursor, host, imageViewDelayLoader, viewClickListener, longClickListener);
-        this.isSmsMessage = isSmsMessage;
-    }
-
-
 
     @Override
     public void bindViewHolder(final ConversationMessageViewHolder holder,
@@ -80,11 +65,7 @@ public class ConversationMessageAdapter extends
         Assert.isTrue(holder.mView instanceof ConversationMessageView);
         final ConversationMessageView conversationMessageView =
                 (ConversationMessageView) holder.mView;
-        if(isSmsMessage) {
-            conversationMessageView.bindToSimMessages(cursor, mSelectedMessageId);
-        } else {
-            conversationMessageView.bind(cursor, mOneOnOne, mSelectedMessageId);
-        }
+        conversationMessageView.bind(cursor, mOneOnOne, mSelectedMessageId);
     }
 
     @Override
@@ -94,7 +75,6 @@ public class ConversationMessageAdapter extends
         final ConversationMessageView conversationMessageView = (ConversationMessageView)
                 layoutInflater.inflate(R.layout.conversation_message_view, null);
         conversationMessageView.setHost(mHost);
-        conversationMessageView.setRidesharingUtil(mRidesharingUtil);
         conversationMessageView.setImageViewDelayLoader(mImageViewDelayLoader);
         return new ConversationMessageViewHolder(conversationMessageView,
                             mViewClickListener, mViewLongClickListener);

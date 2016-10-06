@@ -17,7 +17,6 @@ package com.android.messaging.ui;
 
 import android.content.Context;
 import android.content.Intent;
-import android.net.Uri;
 import android.support.v4.text.BidiFormatter;
 import android.support.v4.text.TextDirectionHeuristicsCompat;
 import android.text.TextUtils;
@@ -28,7 +27,6 @@ import android.view.View.OnLayoutChangeListener;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import com.android.messaging.BugleApplication;
 import com.android.messaging.R;
 import com.android.messaging.datamodel.binding.BindingBase;
 import com.android.messaging.datamodel.binding.DetachableBinding;
@@ -36,9 +34,6 @@ import com.android.messaging.datamodel.data.PersonItemData;
 import com.android.messaging.datamodel.data.PersonItemData.PersonItemDataListener;
 import com.android.messaging.util.AccessibilityUtil;
 import com.android.messaging.util.UiUtils;
-import com.cyanogen.lookup.phonenumber.response.LookupResponse;
-import com.cyanogenmod.messaging.lookup.LookupProviderManager.LookupProviderListener;
-import com.cyanogenmod.messaging.ui.AttributionContactIconView;
 
 /**
  * Shows a view for a "person" - could be a contact or a participant. This always shows a
@@ -49,8 +44,7 @@ import com.cyanogenmod.messaging.ui.AttributionContactIconView;
  * between the underlying data (e.g. ParticipantData) and what the UI wants (e.g. display name).
  */
 public class PersonItemView extends LinearLayout implements PersonItemDataListener,
-        OnLayoutChangeListener, LookupProviderListener {
-
+        OnLayoutChangeListener {
     public interface PersonItemViewListener {
         void onPersonClicked(PersonItemData data);
         boolean onPersonLongClicked(PersonItemData data);
@@ -59,12 +53,10 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
     protected final DetachableBinding<PersonItemData> mBinding;
     private TextView mNameTextView;
     private TextView mDetailsTextView;
-    private AttributionContactIconView mContactIconView;
+    private ContactIconView mContactIconView;
     private View mDetailsContainer;
     private PersonItemViewListener mListener;
     private boolean mAvatarOnly;
-    private String mLastNormalizedNumber;
-    private String mCachedLookupDisplayName;
 
     public PersonItemView(final Context context, final AttributeSet attrs) {
         super(context, attrs);
@@ -76,7 +68,7 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
     protected void onFinishInflate() {
         mNameTextView = (TextView) findViewById(R.id.name);
         mDetailsTextView = (TextView) findViewById(R.id.details);
-        mContactIconView = (AttributionContactIconView) findViewById(R.id.contact_icon);
+        mContactIconView = (ContactIconView) findViewById(R.id.contact_icon);
         mDetailsContainer = findViewById(R.id.details_container);
         mNameTextView.addOnLayoutChangeListener(this);
     }
@@ -87,12 +79,6 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
         if (mBinding.isBound()) {
             mBinding.detach();
         }
-        if (!TextUtils.isEmpty(mLastNormalizedNumber)) {
-            BugleApplication.getLookupProvider()
-                    .removeLookupProviderListener(mLastNormalizedNumber, this);
-            mLastNormalizedNumber = null;
-        }
-        mCachedLookupDisplayName = null;
     }
 
     @Override
@@ -113,11 +99,6 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
             }
             mBinding.unbind();
         }
-        if (!TextUtils.isEmpty(mLastNormalizedNumber)) {
-            BugleApplication.getLookupProvider()
-                    .removeLookupProviderListener(mLastNormalizedNumber, this);
-            mLastNormalizedNumber = null;
-        }
 
         if (personData != null) {
             mBinding.bind(personData);
@@ -128,13 +109,8 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
             final String vocalizedDisplayName = AccessibilityUtil.getVocalizedPhoneNumber(
                     getResources(), getDisplayName());
             mNameTextView.setContentDescription(vocalizedDisplayName);
-            mLastNormalizedNumber = personData.getNormalizedDestination();
         }
         updateViewAppearance();
-        BugleApplication.getLookupProvider()
-                .addLookupProviderListener(mLastNormalizedNumber, this);
-        BugleApplication.getLookupProvider()
-                .lookupInfoForPhoneNumber(mLastNormalizedNumber);
     }
 
     /**
@@ -163,13 +139,7 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
             final int bottom, final int oldLeft, final int oldTop, final int oldRight,
             final int oldBottom) {
         if (mBinding.isBound() && v == mNameTextView) {
-            // TODO: figure out the reason for having this round about way of setting text
-            // and fix this hack to get
-            if (!TextUtils.isEmpty(mCachedLookupDisplayName)) {
-                mNameTextView.setText(mCachedLookupDisplayName);
-            } else {
-                setNameTextView();
-            }
+            setNameTextView();
         }
     }
 
@@ -269,28 +239,4 @@ public class PersonItemView extends LinearLayout implements PersonItemDataListen
     public Intent getClickIntent() {
         return mBinding.getData().getClickIntent();
     }
-
-    @Override
-    public void onNewInfoAvailable(LookupResponse response) {
-        if (response != null) {
-            if (mLastNormalizedNumber == null || mLastNormalizedNumber.equals(response.mNumber)) {
-                // always check for null if in a callback
-                if (mContactIconView != null) {
-                    if (!TextUtils.isEmpty(response.mPhotoUrl)) {
-                        mContactIconView.setImageResourceUri(Uri.parse(response.mPhotoUrl));
-                    }
-                    if (response.mAttributionLogo != null) {
-                        mContactIconView.setAttributionDrawable(response.mAttributionLogo);
-                    }
-                    mContactIconView.setLookupResponse(response);
-                }
-                if (!TextUtils.isEmpty(response.mName)) {
-                    mCachedLookupDisplayName = response.mName;
-                    mNameTextView.setText(mCachedLookupDisplayName);
-                }
-            }
-        }
-
-    }
-
 }

@@ -24,7 +24,6 @@ import android.net.Uri;
 import com.android.messaging.R;
 import com.android.messaging.datamodel.data.ConversationListItemData.ConversationListViewColumns;
 import com.android.messaging.util.Assert;
-import com.android.messaging.util.NotificationUtil;
 import com.android.messaging.util.RingtoneUtil;
 
 public class PeopleOptionsItemData {
@@ -79,8 +78,7 @@ public class PeopleOptionsItemData {
         mItemId = settingType;
         mOtherParticipant = otherParticipant;
 
-        final boolean notificationEnabled = NotificationUtil
-                .getConversationNotificationEnabled(cursor.getInt(INDEX_NOTIFICATION_ENABLED));
+        final boolean notificationEnabled = cursor.getInt(INDEX_NOTIFICATION_ENABLED) == 1;
         switch (settingType) {
             case SETTING_NOTIFICATION_ENABLED:
                 mTitle = mContext.getString(R.string.notifications_enabled_conversation_pref_title);
@@ -106,8 +104,7 @@ public class PeopleOptionsItemData {
 
             case SETTING_NOTIFICATION_VIBRATION:
                 mTitle = mContext.getString(R.string.notification_vibrate_pref_title);
-                mChecked = NotificationUtil.getConversationNotificationVibrateEnabled(
-                        cursor.getInt(INDEX_NOTIFICATION_VIBRATION));
+                mChecked = cursor.getInt(INDEX_NOTIFICATION_VIBRATION) == 1;
                 mEnabled = notificationEnabled;
                 break;
 

@@ -33,7 +33,6 @@ import android.view.Window;
 
 import com.android.messaging.R;
 import com.android.messaging.datamodel.action.ReceiveSmsMessageAction;
-import com.android.messaging.datamodel.BugleNotifications;
 import com.android.messaging.util.Assert;
 
 import java.util.ArrayList;
@@ -80,12 +79,6 @@ public class ClassZeroActivity extends Activity {
     private boolean queueMsgFromIntent(final Intent msgIntent) {
         final ContentValues messageValues =
                 msgIntent.getParcelableExtra(UIIntents.UI_INTENT_EXTRA_MESSAGE_VALUES);
-        final boolean isReplaceable =
-                msgIntent.getBooleanExtra(UIIntents.UI_INTENT_EXTRA_MESSAGE_REPLACEABLE, false);
-        messageValues.put(UIIntents.UI_INTENT_EXTRA_MESSAGE_REPLACEABLE, isReplaceable);
-        if (VERBOSE) {
-            Log.d(TAG, "queueMsgFromIntent isReplaceable = " + isReplaceable);
-        }
         // that takes the format argument is a hidden API right now.
         final String message = messageValues.getAsString(Sms.BODY);
         if (TextUtils.isEmpty(message)) {
@@ -95,8 +88,6 @@ public class ClassZeroActivity extends Activity {
             return false;
         }
         mMessageQueue.add(messageValues);
-        // Show a notification to let the user know a new message has arrived
-        BugleNotifications.playClassZeroNotification();
         return true;
     }
 
@@ -113,11 +104,7 @@ public class ClassZeroActivity extends Activity {
 
     private void saveMessage() {
         mMessageValues.put(Sms.Inbox.READ, mRead ? Integer.valueOf(1) : Integer.valueOf(0));
-        final boolean isReplaceable =
-            mMessageValues.getAsBoolean(UIIntents.UI_INTENT_EXTRA_MESSAGE_REPLACEABLE);
-        mMessageValues.remove(UIIntents.UI_INTENT_EXTRA_MESSAGE_REPLACEABLE);
-        final ReceiveSmsMessageAction action = new ReceiveSmsMessageAction(mMessageValues,
-            isReplaceable);
+        final ReceiveSmsMessageAction action = new ReceiveSmsMessageAction(mMessageValues);
         action.start();
     }
 

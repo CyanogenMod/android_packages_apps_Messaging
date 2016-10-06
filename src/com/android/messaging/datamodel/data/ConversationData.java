@@ -599,10 +599,8 @@ public class ConversationData extends BindableData {
             InsertNewMessageAction.insertNewMessage(message);
         } else {
             final int systemDefaultSubId = PhoneUtils.getDefault().getDefaultSmsSubscriptionId();
-            if (PhoneUtils.getOverrideSendingSubId() != ParticipantData.DEFAULT_SELF_SUB_ID) {
-                InsertNewMessageAction.insertNewMessage(message, PhoneUtils.getOverrideSendingSubId());
-            } else if (systemDefaultSubId != ParticipantData.DEFAULT_SELF_SUB_ID &&
-                mSelfParticipantsData.isDefaultSelf(message.getSelfId())) {
+            if (systemDefaultSubId != ParticipantData.DEFAULT_SELF_SUB_ID &&
+                    mSelfParticipantsData.isDefaultSelf(message.getSelfId())) {
                 // Lock the sub selection to the system default SIM as soon as the user clicks on
                 // the send button to avoid races between this and when InsertNewMessageAction is
                 // actually executed on the data model thread, during which the user can potentially

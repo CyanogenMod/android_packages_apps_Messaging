@@ -101,9 +101,6 @@ public class ReceiveMmsMessageAction extends Action implements Parcelable {
             // TODO: Also write these values to the telephony provider
             mms.mRead = messageInFocusedConversation;
             mms.mSeen = messageInObservableConversation || blocked;
-            if (messageInFocusedConversation) {
-                MmsUtils.sendMmsReadReport(mms.mThreadId, PduHeaders.READ_STATUS_READ);
-            }
 
             // Write received placeholder message to our DB
             db.beginTransaction();
@@ -137,8 +134,7 @@ public class ReceiveMmsMessageAction extends Action implements Parcelable {
             if (!autoDownload) {
                 MessagingContentProvider.notifyMessagesChanged(message.getConversationId());
                 MessagingContentProvider.notifyPartsChanged();
-                MessageRecyclerAction.deleteMessagesOverLimit(conversationId,
-                        MessageData.PROTOCOL_MMS);
+
                 // Show a notification to let the user know a new message has arrived
                 BugleNotifications.update(false/*silent*/, conversationId,
                         BugleNotifications.UPDATE_ALL);

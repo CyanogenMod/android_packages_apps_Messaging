@@ -17,7 +17,6 @@
 package com.android.messaging.datamodel;
 
 import android.app.Notification;
-import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
@@ -26,10 +25,7 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
 import android.graphics.Typeface;
-import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -47,8 +43,6 @@ import android.text.TextUtils;
 import android.text.style.StyleSpan;
 import android.text.style.TextAppearanceSpan;
 
-import android.util.Log;
-import android.widget.RemoteViews;
 import com.android.messaging.Factory;
 import com.android.messaging.R;
 import com.android.messaging.datamodel.MessageNotificationState.BundledMessageNotificationState;
@@ -59,7 +53,6 @@ import com.android.messaging.datamodel.action.MarkAsReadAction;
 import com.android.messaging.datamodel.action.MarkAsSeenAction;
 import com.android.messaging.datamodel.action.RedownloadMmsAction;
 import com.android.messaging.datamodel.data.ConversationListItemData;
-import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.datamodel.media.AvatarRequestDescriptor;
 import com.android.messaging.datamodel.media.ImageResource;
 import com.android.messaging.datamodel.media.MediaRequest;
@@ -88,17 +81,11 @@ import com.android.messaging.util.RingtoneUtil;
 import com.android.messaging.util.ThreadUtil;
 import com.android.messaging.util.UriUtil;
 
-import com.cyanogenmod.messaging.quickmessage.QuickMessageHelper;
-import com.cyanogenmod.messaging.quickmessage.NotificationInfo;
-
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-
-import com.sudamod.sdk.smscodehelper.SmscoderHelper;
-import com.android.messaging.receiver.CopyCaptchasReceiver;
 
 /**
  * Handle posting, updating and removing all conversation notifications.
@@ -114,8 +101,6 @@ import com.android.messaging.receiver.CopyCaptchasReceiver;
  *
  */
 public class BugleNotifications {
-
-    public static final int CAPTCHAS_NOTIFICATION_ID = 127;
     // Logging
     public static final String TAG = LogUtil.BUGLE_NOTIFICATIONS_TAG;
 
@@ -132,9 +117,6 @@ public class BugleNotifications {
     private static final String SMS_ERROR_NOTIFICATION_TAG = ":error:";
 
     private static final String WEARABLE_COMPANION_APP_PACKAGE = "com.google.android.wearable.app";
-
-    private static final String ANDROID_PACKAGE_NAME = "android";
-    private static final String RESOURCE_ID = "id";
 
     private static final Set<NotificationState> sPendingNotifications =
             new HashSet<NotificationState>();
@@ -173,12 +155,6 @@ public class BugleNotifications {
         update(silent, null /* conversationId */, coverage);
     }
 
-
-    public static void update(final boolean silent, final String conversationId,
-            final int coverage) {
-        update(null, silent, conversationId, coverage);
-    }
-
     /**
      * Entry point for posting notifications.
      * Don't call this on the UI thread.
@@ -188,14 +164,14 @@ public class BugleNotifications {
      * @param coverage Indicates which notification types should be checked. Valid values are
      * UPDATE_NONE, UPDATE_MESSAGES, UPDATE_ERRORS, or UPDATE_ALL
      */
-    public static void update(MessageData message, final boolean silent, final String conversationId,
+    public static void update(final boolean silent, final String conversationId,
             final int coverage) {
         if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
             LogUtil.v(TAG, "Update: silent = " + silent
                     + " conversationId = " + conversationId
                     + " coverage = " + coverage);
         }
-        Assert.isNotMainThread();
+    Assert.isNotMainThread();
         checkInitialized();
 
         if (!shouldNotify()) {
@@ -206,85 +182,12 @@ public class BugleNotifications {
             return;
         } else {
             if ((coverage & UPDATE_MESSAGES) != 0) {
-                if(message != null){
-                    String captchas = SmscoderHelper.getSmsCode("", message.getMessageText());
-		    String captchaProvider = SmscoderHelper.getSender("", message.getMessageText());
-                    long timeMillis = message.getReceivedTimeStamp();
-		    if(captchas != null && !"".equals(captchas)) {
-		        updateCaptchasNotication(conversationId, captchas, captchaProvider, timeMillis);
-                        return;
-		    }
-                }
                 createMessageNotification(silent, conversationId);
             }
         }
         if ((coverage & UPDATE_ERRORS) != 0) {
             MessageNotificationState.checkFailedMessages();
         }
-    }
-	
-    private static void updateCaptchasNotication(String conversationId, String captchas, String captchaProvider, long timeMillis) {
-
-        Context context = Factory.get().getApplicationContext();
-        cancelNotification(context, CAPTCHAS_NOTIFICATION_ID);
-
-        final NotificationManagerCompat notificationManager =
-                NotificationManagerCompat.from(context);
-
-        String title = TextUtils.isEmpty(captchaProvider) ? String.format(context.getString(R.string.captchas_title), captchas)
-                : String.format(context.getString(R.string.captchas_with_provider_title), captchas, captchaProvider);
-
-        NotificationCompat.BigTextStyle style = new NotificationCompat.BigTextStyle()
-                .setBigContentTitle(context.getString(R.string.captchas_title)).bigText(context.getString(R.string.captchas_content));
-
-        NotificationCompat.Builder noti = new NotificationCompat.Builder(context).setWhen(timeMillis);
-        noti.setTicker(title).setContentTitle(title).setColor(context.getResources()
-                .getColor(R.color.notification_accent_color)).setPriority(Notification.PRIORITY_HIGH).setStyle(style).setContentText(context.getString(R.string.captchas_content));
-
-        Intent captchasIntent = new Intent();
-        captchasIntent.setClass(context, CopyCaptchasReceiver.class);
-        captchasIntent.putExtra("captchas", captchas);
-        captchasIntent.putExtra("conversationId", conversationId);
-        PendingIntent captchasPendingIntent = PendingIntent.getBroadcast(context, 0, captchasIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT);
-        noti.setContentIntent(captchasPendingIntent);
-
-        // Always have to set the small icon or the notification is ignored
-        noti.setSmallIcon(R.drawable.ic_sms_multi_light);
-        int defaults = 0;
-
-        final Uri ringtoneUri = getNotificationRingtoneUriForConversationId(conversationId);
-        final BuglePrefs prefs = Factory.get().getApplicationPrefs();
-        final String prefKey = context.getString(R.string.notification_vibration_pref_key);
-
-        final boolean shoudVib = prefs.getBoolean(prefKey, context.getResources().getBoolean(
-                 R.bool.notification_vibration_pref_default));
-
-        if (shoudVib) {
-            defaults |= Notification.DEFAULT_VIBRATE;
-        }
-
-        defaults |= Notification.DEFAULT_LIGHTS;
-
-        noti.setDefaults(defaults);
-        NotificationManagerCompat nm = NotificationManagerCompat.from(context);
-        nm.notify(CAPTCHAS_NOTIFICATION_ID, noti.build());
-
-	}	
-
-    public static void cancelNotification(Context context,int notificationId) {
-        NotificationManager nm = (NotificationManager) context.getSystemService(
-                Context.NOTIFICATION_SERVICE);
-        nm.cancel(notificationId);
-    }
-	
-    /**
-     * Play a sound to notify arrival of a class 0 message
-     *
-     */
-    public static void playClassZeroNotification() {
-        final Uri ringtoneUri = RingtoneUtil.getNotificationRingtoneUri(null);
-        playObservableConversationNotificationSound(ringtoneUri);
     }
 
     /**
@@ -551,11 +454,6 @@ public class BugleNotifications {
                     .getPendingIntentForConversationActivity(context,
                             state.mConversationIds.first(),
                             null /*draft*/);
-
-            NotificationInfo ni = state.getNotificationInfo();
-            if (ni != null) {
-                QuickMessageHelper.addQuickMessageAction(context, notifBuilder, ni);
-            }
         }
         notifBuilder.setContentIntent(destinationIntent);
 
@@ -576,15 +474,8 @@ public class BugleNotifications {
 
         if (state.mParticipantAvatarsUris != null) {
             final Uri avatarUri = state.mParticipantAvatarsUris.get(0);
-            UriImageRequestDescriptor descriptor;
-            // Use generic Uri descriptor if not an Avatar.
-            if (AvatarUriUtil.isAvatarUri(avatarUri)) {
-                descriptor = new AvatarRequestDescriptor(avatarUri,
-                        sIconWidth, sIconHeight, OsUtil.isAtLeastL());
-            } else {
-                descriptor = new UriImageRequestDescriptor(avatarUri, sIconWidth, sIconHeight,
-                        true, 0, 0);
-            }
+            final AvatarRequestDescriptor descriptor = new AvatarRequestDescriptor(avatarUri,
+                    sIconWidth, sIconHeight, OsUtil.isAtLeastL());
             final MediaRequest<ImageResource> imageRequest = descriptor.buildSyncMediaRequest(
                     context);
 
@@ -947,17 +838,7 @@ public class BugleNotifications {
 
         // Apply the wearable options and build & post the notification
         notifBuilder.extend(wearableExtender);
-
-        // Apply custom icon.
-        Notification notification = notifBuilder.build();
-        if (notificationState instanceof MessageNotificationState) {
-            Drawable icon = ((MessageNotificationState) notificationState).getCustomIcon();
-            if (icon != null) {
-                applyCustomNotificationIcon(context, notification, icon);
-            }
-        }
-
-        doNotify(notification, notificationState);
+        doNotify(notifBuilder.build(), notificationState);
     }
 
     private static void setWearableGroupOptions(final NotificationCompat.Builder notifBuilder,
@@ -1336,36 +1217,5 @@ public class BugleNotifications {
                 PendingIntentConstants.MSG_SEND_ERROR,
                 builder.build());
     }
-
-    private static void applyCustomNotificationIcon(Context context, Notification notification,
-            Drawable logo) {
-        RemoteViews[] viewsToUpdate = new RemoteViews[] {
-                notification.contentView,
-                notification.bigContentView,
-                notification.headsUpContentView};
-        // add LookupProvider badge to Notification
-        Bitmap bitmap;
-        if (logo instanceof BitmapDrawable) {
-            bitmap = ((BitmapDrawable) logo).getBitmap();
-        } else {
-            bitmap = Bitmap.createBitmap(logo.getIntrinsicWidth(), logo.getIntrinsicHeight(),
-                    Bitmap.Config.ARGB_8888);
-            Canvas canvas = new Canvas(bitmap);
-            logo.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
-            logo.draw(canvas);
-        }
-        for (RemoteViews view : viewsToUpdate) {
-            if (view == null) continue;
-            int rightIconId = getNotificationRightIconId(context);
-            view.setImageViewBitmap(rightIconId, bitmap);
-            view.setViewPadding(rightIconId, 0, 0, 0, 0);
-        }
-    }
-
-    private static int getNotificationRightIconId(Context context) {
-        // check if resource ID exists, should cause build error if this resource does not exist
-        int checkResourceExists = com.android.internal.R.id.right_icon;
-        return context.getResources().getIdentifier("right_icon", RESOURCE_ID,
-                ANDROID_PACKAGE_NAME);
-    }
 }
+

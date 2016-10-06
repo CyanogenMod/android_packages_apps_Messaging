@@ -37,6 +37,7 @@
             android:layout_height="wrap_content"
             android:gravity="center_vertical|left"
             android:visibility="gone"
+            android:src="@drawable/ic_archive_small_dark"
             android:importantForAccessibility="no"
             android:contentDescription="@null"/>
         <FrameLayout
@@ -49,6 +50,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical|right"
             android:visibility="gone"
+            android:src="@drawable/ic_archive_small_dark"
             android:importantForAccessibility="no"
             android:contentDescription="@null"/>
     </LinearLayout>
@@ -73,7 +75,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="@android:color/transparent">
-                <com.cyanogenmod.messaging.ui.AttributionContactIconView
+                <com.android.messaging.ui.ContactIconView
                     android:id="@+id/conversation_icon"
                     android:layout_width="@dimen/conversation_list_contact_icon_size"
                     android:layout_height="@dimen/conversation_list_contact_icon_size"
@@ -127,27 +129,14 @@
                         android:contentDescription="@null"
                         android:layout_gravity="center_vertical"
                         android:background="@android:color/transparent" />
-                    <RelativeLayout
+                    <TextView
+                        android:id="@+id/conversation_name"
+                        style="@style/ConversationListItemViewConversationNameStyle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:singleLine="true"
                         android:layout_gravity="center_vertical"
-                        android:background="@android:color/transparent">
-                        <TextView
-                            android:id="@+id/conversation_name"
-                            style="@style/ConversationListItemViewConversationNameStyle"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_alignParentLeft="true"
-                            android:singleLine="true"
-                            android:paddingBottom="2dp" />
-                        <TextView
-                            android:id="@+id/phone_location"
-                            android:textSize="12sp"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_alignParentRight="true"
-                            android:paddingBottom="2dp" />
-                    </RelativeLayout>
+                        android:paddingBottom="2dp" />
                 </LinearLayout>
                 <TextView
                     android:id="@+id/conversation_subject"

@@ -23,8 +23,6 @@ import com.android.messaging.datamodel.DatabaseHelper.MessageColumns;
 import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.util.ConversationIdSet;
 
-import com.cyanogenmod.messaging.quickmessage.NotificationInfo;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 
@@ -147,9 +145,5 @@ public abstract class NotificationState {
 
     public long getLatestReceivedTimestamp() {
         return Long.MIN_VALUE;
-    }
-
-    public NotificationInfo getNotificationInfo() {
-        return null;
     }
 }

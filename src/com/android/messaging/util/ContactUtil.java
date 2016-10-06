@@ -33,8 +33,6 @@ import android.provider.ContactsContract.Profile;
 import android.text.TextUtils;
 import android.view.View;
 
-import com.android.contacts.common.model.ContactBuilder;
-import com.android.contacts.common.model.ContactBuilder.Address;
 import com.android.ex.chips.RecipientEntry;
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.CursorQueryData;
@@ -42,7 +40,6 @@ import com.android.messaging.datamodel.FrequentContactsCursorQueryData;
 import com.android.messaging.datamodel.data.ParticipantData;
 import com.android.messaging.sms.MmsSmsUtils;
 import com.android.messaging.ui.contact.AddContactsConfirmationDialog;
-import com.cyanogen.lookup.phonenumber.response.LookupResponse;
 import com.google.common.annotations.VisibleForTesting;
 
 /**
@@ -190,28 +187,6 @@ public class ContactUtil {
     /**
      * Shows a contact card or add to contacts dialog for the given contact info
      * @param view The view whose click triggered this to show
-     * @param lookupResponse The response from the lookup provider
-     */
-    public static void showOrAddContact(final View view, final LookupResponse lookupResponse) {
-        if (lookupResponse != null) {
-            ContactBuilder builder = new ContactBuilder(ContactBuilder.REVERSE_LOOKUP,
-                    lookupResponse.mNumber, lookupResponse.mNumber);
-            builder.setName(ContactBuilder.Name.createDisplayName(lookupResponse.mName));
-            builder.addPhoneNumber(ContactBuilder.PhoneNumber.createMainNumber(lookupResponse
-                    .mNumber));
-            builder.setPhotoUrl(lookupResponse.mPhotoUrl);
-            builder.setSpamCount(lookupResponse.mSpamCount);
-            builder.setInfoProviderName(lookupResponse.mProviderName);
-            builder.addAddress(Address.createFormattedHome(lookupResponse.mAddress));
-            final Uri lookupUri = builder.build().getLookupUri();
-            ContactsContract.QuickContact.showQuickContact(view.getContext(), view, lookupUri,
-                    ContactsContract.QuickContact.MODE_LARGE, null);
-        }
-    }
-
-    /**
-     * Shows a contact card or add to contacts dialog for the given contact info
-     * @param view The view whose click triggered this to show
      * @param contactId The id of the contact in the android contacts DB
      * @param contactLookupKey The lookup key from contacts DB
      * @param avatarUri Uri to the avatar image if available
@@ -222,8 +197,8 @@ public class ContactUtil {
             final String normalizedDestination) {
         if (contactId > ParticipantData.PARTICIPANT_CONTACT_ID_NOT_RESOLVED
                 && !TextUtils.isEmpty(contactLookupKey)) {
-            final Uri lookupUri = ContactsContract.Contacts.getLookupUri(contactId,
-                    contactLookupKey);
+            final Uri lookupUri =
+                    ContactsContract.Contacts.getLookupUri(contactId, contactLookupKey);
             ContactsContract.QuickContact.showQuickContact(view.getContext(), view, lookupUri,
                     ContactsContract.QuickContact.MODE_LARGE, null);
         } else if (!TextUtils.isEmpty(normalizedDestination) && !TextUtils.equals(
@@ -299,6 +274,18 @@ public class ContactUtil {
     }
 
     /**
+     * Get a list of destinations (phone, email) matching the partial destination in work profile.
+     */
+    public static CursorQueryData filterDestinationEnterprise(final Context context,
+            final String destination) {
+        if (shouldFilterForEmail(destination)) {
+            return ContactUtil.filterEmailsEnterprise(context, destination);
+        } else {
+            return ContactUtil.filterPhonesEnterprise(context, destination);
+        }
+    }
+
+    /**
      * Get a list of phones matching a search criteria. The search may be on contact name or
      * phone number. In case search is on contact name, all matching contact's phone number
      * will be returned.
@@ -307,19 +294,29 @@ public class ContactUtil {
      */
     @VisibleForTesting
     public static CursorQueryData filterPhones(final Context context, final String query) {
+        return filterPhonesInternal(context, Phone.CONTENT_FILTER_URI, query, Directory.DEFAULT);
+    }
+
+    /**
+     * Similar to {@link #filterPhones(Context, String)}, but search in work profile instead.
+     */
+    public static CursorQueryData filterPhonesEnterprise(final Context context,
+            final String query) {
+        return filterPhonesInternal(context, Phone.ENTERPRISE_CONTENT_FILTER_URI, query,
+                Directory.ENTERPRISE_DEFAULT);
+    }
+
+    private static CursorQueryData filterPhonesInternal(final Context context,
+            final Uri phoneFilterBaseUri, final String query, final long directoryId) {
         if (!ContactUtil.hasReadContactsPermission()) {
             return CursorQueryData.getEmptyQueryData();
         }
-
-        final Uri uri = Phone.CONTENT_FILTER_URI.buildUpon()
-                .appendPath(query).appendQueryParameter(
-                        ContactsContract.DIRECTORY_PARAM_KEY, String.valueOf(Directory.DEFAULT))
-                        .build();
-
-        return new CursorQueryData(context, uri, PhoneQuery.PROJECTION, null, null,
+        Uri phoneFilterUri = buildDirectorySearchUri(phoneFilterBaseUri, query, directoryId);
+        return new CursorQueryData(context,
+                phoneFilterUri,
+                PhoneQuery.PROJECTION, null, null,
                 PhoneQuery.SORT_KEY);
     }
-
     /**
      * Lookup a phone based on a phone number. Supplied phone should be a relatively complete
      * phone number for this to succeed. PhoneLookup URI will apply some smartness to do a
@@ -361,17 +358,29 @@ public class ContactUtil {
      */
     @VisibleForTesting
     public static CursorQueryData filterEmails(final Context context, final String query) {
+        return filterEmailsInternal(context, Email.CONTENT_FILTER_URI, query, Directory.DEFAULT);
+    }
+
+    /**
+     * Similar to {@link #filterEmails(Context, String)}, but search in work profile instead.
+     */
+    public static CursorQueryData filterEmailsEnterprise(final Context context,
+            final String query) {
+        return filterEmailsInternal(context, Email.ENTERPRISE_CONTENT_FILTER_URI, query,
+                Directory.ENTERPRISE_DEFAULT);
+    }
+
+    private static CursorQueryData filterEmailsInternal(final Context context,
+            final Uri filterEmailsBaseUri, final String query, final long directoryId) {
         if (!ContactUtil.hasReadContactsPermission()) {
             return CursorQueryData.getEmptyQueryData();
         }
-
-        final Uri uri = Email.CONTENT_FILTER_URI.buildUpon()
-                .appendPath(query).appendQueryParameter(
-                        ContactsContract.DIRECTORY_PARAM_KEY, String.valueOf(Directory.DEFAULT))
-                        .build();
-
-        return new CursorQueryData(context, uri, EmailQuery.PROJECTION, null, null,
-                EmailQuery.SORT_KEY);
+        final Uri filterEmailsUri = buildDirectorySearchUri(filterEmailsBaseUri, query,
+                directoryId);
+        return new CursorQueryData(context,
+                filterEmailsUri,
+                PhoneQuery.PROJECTION, null, null,
+                PhoneQuery.SORT_KEY);
     }
 
     /**
@@ -510,25 +519,15 @@ public class ContactUtil {
      * Returns if a given contact id belongs to managed profile.
      */
     public static boolean isEnterpriseContactId(final long contactId) {
-        return isWorkProfileSupported()
-                && ContactsContract.Contacts.isEnterpriseContactId(contactId);
-    }
-
-    /**
-     * Returns if managed profile is supported.
-     */
-    public static boolean isWorkProfileSupported() {
-        final PackageManager pm = Factory.get().getApplicationContext().getPackageManager();
-        return pm.hasSystemFeature(PackageManager.FEATURE_MANAGED_USERS);
+        return OsUtil.isAtLeastL() && ContactsContract.Contacts.isEnterpriseContactId(contactId);
     }
 
     /**
      * Returns Email lookup uri that will query both primary and corp profile
      */
     private static Uri getEmailContentLookupUri() {
-        if (isWorkProfileSupported() && OsUtil.isAtLeastM()) {
-            // TODO: use Email.ENTERPRISE_CONTENT_LOOKUP_URI, which will be available in M SDK API
-            return Uri.parse("content://com.android.contacts/data/emails/lookup_enterprise");
+        if (OsUtil.isAtLeastM()) {
+            return Email.ENTERPRISE_CONTENT_LOOKUP_URI;
         }
         return Email.CONTENT_LOOKUP_URI;
     }
@@ -537,8 +536,7 @@ public class ContactUtil {
      * Returns PhoneLookup URI.
      */
     public static Uri getPhoneLookupUri() {
-        // Apply it to M only
-        if (isWorkProfileSupported() && OsUtil.isAtLeastM()) {
+        if (OsUtil.isAtLeastM()) {
             return PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI;
         }
         return PhoneLookup.CONTENT_FILTER_URI;
@@ -546,5 +544,13 @@ public class ContactUtil {
 
     public static boolean hasReadContactsPermission() {
         return OsUtil.hasPermission(Manifest.permission.READ_CONTACTS);
+    }
+
+    private static Uri buildDirectorySearchUri(final Uri uri, final String query,
+            final long directoryId) {
+        return uri.buildUpon()
+                .appendPath(query).appendQueryParameter(
+                        ContactsContract.DIRECTORY_PARAM_KEY, String.valueOf(directoryId))
+                .build();
     }
 }

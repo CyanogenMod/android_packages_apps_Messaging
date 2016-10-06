@@ -334,7 +334,6 @@ public class InsertNewMessageAction extends Action implements Parcelable {
             }
             MessagingContentProvider.notifyMessagesChanged(conversationId);
             MessagingContentProvider.notifyPartsChanged();
-            MessageRecyclerAction.deleteMessagesOverLimit(conversationId, MessageData.PROTOCOL_SMS);
         } else {
             // Ignore error as we only really care about the individual messages?
             LogUtil.e(TAG,
@@ -413,7 +412,6 @@ public class InsertNewMessageAction extends Action implements Parcelable {
             }
             MessagingContentProvider.notifyMessagesChanged(conversationId);
             MessagingContentProvider.notifyPartsChanged();
-            MessageRecyclerAction.deleteMessagesOverLimit(conversationId, MessageData.PROTOCOL_SMS);
         } else {
             LogUtil.e(TAG, "InsertNewMessageAction: No uri for SMS inserted into telephony DB");
         }
@@ -454,7 +452,7 @@ public class InsertNewMessageAction extends Action implements Parcelable {
         }
         MessagingContentProvider.notifyMessagesChanged(conversationId);
         MessagingContentProvider.notifyPartsChanged();
-        MessageRecyclerAction.deleteMessagesOverLimit(conversationId, MessageData.PROTOCOL_MMS);
+
         return message;
     }
 

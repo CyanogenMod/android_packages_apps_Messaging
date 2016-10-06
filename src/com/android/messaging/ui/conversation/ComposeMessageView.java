@@ -15,26 +15,16 @@
  */
 package com.android.messaging.ui.conversation;
 
-import android.app.Activity;
-import android.app.DialogFragment;
 import android.content.Context;
 import android.content.res.Resources;
-import android.content.SharedPreferences;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
-import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBar;
-import android.telecom.TelecomManager;
-import android.telecom.PhoneAccount;
-import android.telecom.PhoneAccountHandle;
-import android.telephony.TelephonyManager;
-import android.telephony.SmsManager;
 import android.text.Editable;
 import android.text.Html;
 import android.text.InputFilter;
 import android.text.InputFilter.LengthFilter;
-import android.text.InputType;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.AttributeSet;
@@ -46,8 +36,6 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-
-import com.android.contacts.common.widget.SelectPhoneAccountDialogFragment;
 
 import com.android.messaging.Factory;
 import com.android.messaging.R;
@@ -79,13 +67,8 @@ import com.android.messaging.util.ContentType;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.MediaUtil;
 import com.android.messaging.util.OsUtil;
-import com.android.messaging.util.PhoneUtils;
 import com.android.messaging.util.UiUtils;
-import com.android.messaging.util.UnicodeFilter;
 
-import com.cyanogenmod.messaging.util.PrefsUtils;
-
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -137,7 +120,6 @@ public class ComposeMessageView extends LinearLayout
     private ImageButton mDeleteSubjectButton;
     private AttachmentPreview mAttachmentPreview;
     private ImageButton mAttachMediaButton;
-    private UnicodeFilter mUnicodeFilter;
 
     private final Binding<DraftMessageData> mBinding;
     private IComposeMessageViewHost mHost;
@@ -176,18 +158,6 @@ public class ComposeMessageView extends LinearLayout
         super(new ContextThemeWrapper(context, R.style.ColorAccentBlueOverrideStyle), attrs);
         mOriginalContext = context;
         mBinding = BindingBase.createBinding(this);
-
-        String unicodeIntactValue = context.getString(R.string.unicode_stripping_leave_intact_value);
-        String unicodePrefKey = context.getString(R.string.unicode_stripping_pref_key);
-        SharedPreferences prefs = context.getSharedPreferences(BuglePrefs.SHARED_PREFERENCES_NAME,
-                Context.MODE_PRIVATE);
-        String unicodeStripping = prefs.getString(unicodePrefKey, unicodeIntactValue);
-        if (!unicodeIntactValue.equals(unicodeStripping)) {
-            String unicodeNonEncodableValue = context.getString(
-                    R.string.unicode_stripping_non_encodable_value);
-            boolean stripNonEncodableOnly = unicodeNonEncodableValue.equals(unicodeStripping);
-            mUnicodeFilter = new UnicodeFilter(stripNonEncodableOnly);
-        }
     }
 
     /**
@@ -212,55 +182,6 @@ public class ComposeMessageView extends LinearLayout
         mBinding.unbind();
         mHost = null;
         mInputManager.onDetach();
-    }
-
-    public interface OnSimSelectedCallback {
-        void onSimSelected(int subId);
-    }
-
-    /**
-     * display the sim select dialog for multi sim phones
-     */
-    private void showSimSelector(Activity activity, final OnSimSelectedCallback cb) {
-        final TelecomManager telecomMgr =
-                (TelecomManager) activity.getSystemService(Context.TELECOM_SERVICE);
-        final List<PhoneAccountHandle> handles = telecomMgr.getCallCapablePhoneAccounts();
-        final List<PhoneAccountHandle> filteredHandles = new ArrayList<>();
-
-        //trim out SIP accounts
-        for (PhoneAccountHandle handle : handles) {
-            PhoneAccount phoneAccount = PhoneUtils.getAccountOrNull(activity, handle);
-            if (phoneAccount != null) {
-                Uri address = phoneAccount.getAddress();
-                if (address != null &&
-                        !TextUtils.equals(address.getScheme(), PhoneAccount.SCHEME_SIP)) {
-                    filteredHandles.add(handle);
-                }
-            }
-        }
-
-        final SelectPhoneAccountDialogFragment.SelectPhoneAccountListener listener =
-                new SelectPhoneAccountDialogFragment.SelectPhoneAccountListener() {
-                    @Override
-                    public void onPhoneAccountSelected(PhoneAccountHandle selectedAccountHandle,
-                                                       boolean setDefault) {
-                        cb.onSimSelected(Integer.valueOf(selectedAccountHandle.getId()));
-                    }
-                    @Override
-                    public void onDialogDismissed() {
-                    }
-                };
-
-        DialogFragment dialogFragment = SelectPhoneAccountDialogFragment.newInstance(
-                R.string.select_phone_account_title,
-                false /* canSetDefault */,
-                filteredHandles, listener);
-        dialogFragment.show(activity.getFragmentManager(), "SELECT_PHONE_ACCOUNT_DIALOG_FRAGMENT");
-    }
-
-    private boolean isSMSPromptEnabled() {
-        return PhoneUtils.getDefault().getActiveSubscriptionCount() > 1 &&
-                !PhoneUtils.getDefault().getHasPreferredSmsSim();
     }
 
     @Override
@@ -292,14 +213,6 @@ public class ComposeMessageView extends LinearLayout
                 new LengthFilter(MmsConfig.get(ParticipantData.DEFAULT_SELF_SUB_ID)
                         .getMaxTextLimit()) });
 
-        if (PrefsUtils.isShowEmoticonsEnabled()) {
-            mComposeEditText.setInputType(mComposeEditText.getInputType()
-                    | InputType.TYPE_TEXT_VARIATION_SHORT_MESSAGE);
-        } else {
-            mComposeEditText.setInputType(mComposeEditText.getInputType()
-                    & ~InputType.TYPE_TEXT_VARIATION_SHORT_MESSAGE);
-        }
-
         mSelfSendIcon = (SimIconView) findViewById(R.id.self_send_icon);
         mSelfSendIcon.setOnClickListener(new OnClickListener() {
             @Override
@@ -322,10 +235,6 @@ public class ComposeMessageView extends LinearLayout
                 return true;
             }
         });
-
-        if (isSMSPromptEnabled()) {
-            mSelfSendIcon.setVisibility(INVISIBLE);
-        }
 
         mComposeSubjectText = (PlainTextEditText) findViewById(
                 R.id.compose_subject_text);
@@ -354,7 +263,7 @@ public class ComposeMessageView extends LinearLayout
         mSendButton.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(final View clickView) {
-               promptAndSendWithSubId(true);
+                sendMessageInternal(true /* checkMessageSize */);
             }
         });
         mSendButton.setOnLongClickListener(new OnLongClickListener() {
@@ -453,17 +362,10 @@ public class ComposeMessageView extends LinearLayout
     @Override // TextView.OnEditorActionListener.onEditorAction
     public boolean onEditorAction(final TextView view, final int actionId, final KeyEvent event) {
         if (actionId == EditorInfo.IME_ACTION_SEND) {
-            promptAndSendWithSubId(true /* checkMessageSize */);
+            sendMessageInternal(true /* checkMessageSize */);
             return true;
         }
         return false;
-    }
-
-    private CharSequence stripUnicodeIfRequested(CharSequence text) {
-        if (mUnicodeFilter != null) {
-            text = mUnicodeFilter.filter(text);
-        }
-        return text;
     }
 
     private void sendMessageInternal(final boolean checkMessageSize) {
@@ -477,7 +379,7 @@ public class ComposeMessageView extends LinearLayout
         // Check the host for pre-conditions about any action.
         if (mHost.isReadyForAction()) {
             mInputManager.showHideSimSelector(false /* show */, true /* animate */);
-            String messageToSend = stripUnicodeIfRequested(mComposeEditText.getText()).toString();
+            final String messageToSend = mComposeEditText.getText().toString();
             mBinding.getData().setMessageText(messageToSend);
             final String subject = mComposeSubjectText.getText().toString();
             mBinding.getData().setMessageSubject(subject);
@@ -542,7 +444,7 @@ public class ComposeMessageView extends LinearLayout
                     new Runnable() {
                         @Override
                         public void run() {
-                            promptAndSendWithSubId(checkMessageSize);
+                            sendMessageInternal(checkMessageSize);
                         }
 
             });
@@ -716,21 +618,6 @@ public class ComposeMessageView extends LinearLayout
                 mBinding.getData().getSelfId(), false /* excludeDefault */);
     }
 
-    private void promptAndSendWithSubId(final boolean checkMessageSize) {
-        PhoneUtils.setOverrideSendingSubId(ParticipantData.DEFAULT_SELF_SUB_ID);
-        if (isSMSPromptEnabled()) {
-            showSimSelector((Activity)mOriginalContext, new OnSimSelectedCallback() {
-                @Override
-                public void onSimSelected(int subId) {
-                    PhoneUtils.setOverrideSendingSubId(subId);
-                    sendMessageInternal(checkMessageSize);
-                }
-            });
-        } else {
-            sendMessageInternal(checkMessageSize /* checkMessageSize */);
-        }
-    }
-
     private boolean isDataLoadedForMessageSend() {
         // Check data loading prerequisites for sending a message.
         return mConversationDataModel != null && mConversationDataModel.isBound() &&
@@ -818,7 +705,7 @@ public class ComposeMessageView extends LinearLayout
             final SubscriptionListEntry subscriptionListEntry =
                     mConversationDataModel.getData().getSubscriptionEntryForSelfParticipant(
                             mBinding.getData().getSelfId(), false /* excludeDefault */);
-            if (subscriptionListEntry == null || isSMSPromptEnabled()) {
+            if (subscriptionListEntry == null) {
                 mComposeEditText.setHint(R.string.compose_message_view_hint_text);
             } else {
                 mComposeEditText.setHint(Html.fromHtml(getResources().getString(
@@ -957,10 +844,8 @@ public class ComposeMessageView extends LinearLayout
     }
 
     @Override
-    public void onTextChanged(CharSequence s, final int start, final int before,
+    public void onTextChanged(final CharSequence s, final int start, final int before,
             final int count) {
-        // strip unicode for counting characters
-        s = stripUnicodeIfRequested(s);
         final BugleActionBarActivity activity = (mOriginalContext instanceof BugleActionBarActivity)
                 ? (BugleActionBarActivity) mOriginalContext : null;
         if (activity != null && activity.getIsDestroyed()) {
@@ -1040,7 +925,7 @@ public class ComposeMessageView extends LinearLayout
     }
 
     public void sendMessageIgnoreMessageSizeLimit() {
-        promptAndSendWithSubId(false /* checkMessageSize */);
+        sendMessageInternal(false /* checkMessageSize */);
     }
 
     public void onAttachmentPreviewLongClicked() {

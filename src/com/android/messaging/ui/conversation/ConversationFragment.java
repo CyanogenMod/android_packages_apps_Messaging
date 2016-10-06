@@ -51,8 +51,6 @@ import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.RecyclerView.ViewHolder;
-import android.telephony.SubscriptionManager;
-import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.view.ActionMode;
 import android.view.Display;
@@ -65,8 +63,6 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
-import android.widget.Toast;
-import com.android.messaging.BugleApplication;
 import com.android.messaging.R;
 import com.android.messaging.datamodel.DataModel;
 import com.android.messaging.datamodel.MessagingContentProvider;
@@ -84,7 +80,6 @@ import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.datamodel.data.MessagePartData;
 import com.android.messaging.datamodel.data.ParticipantData;
 import com.android.messaging.datamodel.data.SubscriptionListData.SubscriptionListEntry;
-import com.android.messaging.sms.SimMessagesUtils;
 import com.android.messaging.ui.AttachmentPreview;
 import com.android.messaging.ui.BugleActionBarActivity;
 import com.android.messaging.ui.ConversationDrawables;
@@ -100,7 +95,6 @@ import com.android.messaging.util.AccessibilityUtil;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.AvatarUriUtil;
 import com.android.messaging.util.ChangeDefaultSmsAppHelper;
-import com.android.messaging.util.ContactUtil;
 import com.android.messaging.util.ContentType;
 import com.android.messaging.util.ImeUtil;
 import com.android.messaging.util.LogUtil;
@@ -110,8 +104,6 @@ import com.android.messaging.util.SafeAsyncTask;
 import com.android.messaging.util.TextUtil;
 import com.android.messaging.util.UiUtils;
 import com.android.messaging.util.UriUtil;
-import com.cyanogen.lookup.phonenumber.response.LookupResponse;
-import com.cyanogenmod.messaging.lookup.LookupProviderManager.LookupProviderListener;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
@@ -123,7 +115,7 @@ import java.util.List;
  */
 public class ConversationFragment extends Fragment implements ConversationDataListener,
         IComposeMessageViewHost, ConversationMessageViewHost, ConversationInputHost,
-        DraftMessageDataListener, LookupProviderListener {
+        DraftMessageDataListener {
 
     public interface ConversationFragmentHost extends ImeUtil.ImeStateHost {
         void onStartComposeMessage();
@@ -185,8 +177,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     // Attachment data for the attachment within the selected message that was long pressed
     private MessagePartData mSelectedAttachment;
 
-    private ActionBar mActionBar;
-
     // Normally, as soon as draft message is loaded, we trust the UI state held in
     // ComposeMessageView to be the only source of truth (incl. the conversation self id). However,
     // there can be external events that forces the UI state to change, such as SIM state changes
@@ -201,8 +191,7 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                     intent.getStringExtra(UIIntents.UI_INTENT_EXTRA_CONVERSATION_SELF_ID);
             Assert.notNull(conversationId);
             Assert.notNull(selfId);
-            if (isBound() && TextUtils
-                    .equals(mBinding.getData().getConversationId(), conversationId)) {
+            if (TextUtils.equals(mBinding.getData().getConversationId(), conversationId)) {
                 mComposeMessageView.updateConversationSelfIdOnExternalChange(selfId);
             }
         }
@@ -376,16 +365,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                     // use message-based cursor in conversation.
                     final MessageData message = mBinding.getData().createForwardedMessage(data);
                     UIIntents.get().launchForwardMessageActivity(getActivity(), message);
-                    mHost.dismissActionMode();
-                    return true;
-                case R.id.copy_to_sim:
-                    if (data != null && mBinding.getData().getParticipants() != null ) {
-                        if(SimMessagesUtils.getActivatedIccCardCount() > 1) {
-                            showSimSelectDialog(data);
-                        } else {
-                            copyToSim(data, SubscriptionManager.getDefaultSmsSubId());
-                        }
-                    }
                     mHost.dismissActionMode();
                     return true;
             }
@@ -585,7 +564,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                             @Override
                             public void run() {
                                 view.setAlpha(1);
-                                dispatchAddFinished(holder);
                             }
                         });
                     mPopupTransitionAnimation.startAfterLayoutComplete();
@@ -827,8 +805,7 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                 Assert.notNull(participant);
                 final String destination = participant.getNormalizedDestination();
                 final Uri avatarUri = AvatarUriUtil.createAvatarUri(participant);
-                (new AddContactsConfirmationDialog(getActivity(), avatarUri, destination))
-                        .onClick(null, DialogInterface.BUTTON_POSITIVE);
+                (new AddContactsConfirmationDialog(getActivity(), avatarUri, destination)).show();
                 return true;
 
             case R.id.action_delete:
@@ -1011,8 +988,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
 
         LocalBroadcastManager.getInstance(getActivity())
                 .unregisterReceiver(mConversationSelfIdChangeReceiver);
-        BugleApplication.getLookupProvider().removeLookupProviderListener(mBinding.getData
-                ().getParticipantPhoneNumber(), this);
     }
 
     @Override
@@ -1450,51 +1425,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
         ((BugleActionBarActivity) activity).supportInvalidateOptionsMenu();
     }
 
-    private void copyToSim(ConversationMessageData data, int subId) {
-        boolean success = SimMessagesUtils
-                .copyToSim(data, mBinding.getData().getParticipants(), subId);
-        CharSequence copyToSimStatus = success ?
-                getResources().getText(R.string.copy_to_phone_success) :
-                getResources().getText(R.string.copy_to_sim_fail);
-        Toast.makeText(getActivity(), copyToSimStatus.toString(),
-                Toast.LENGTH_SHORT).show();
-    }
-
-    private void showSimSelectDialog(ConversationMessageData data) {
-        String[] items = new String[TelephonyManager.getDefault()
-                .getPhoneCount()];
-        for (int i = 0; i < items.length; i++) {
-            items[i] = SimMessagesUtils.getMultiSimName(
-                    getActivity(), i);
-        }
-        CopyToSimSelectListener listener = new CopyToSimSelectListener(
-                data);
-        new AlertDialog.Builder(getActivity())
-                .setTitle(R.string.copy_to_sim)
-                .setPositiveButton(android.R.string.ok, listener)
-                .setSingleChoiceItems(items, 0, listener)
-                .setCancelable(true).show();
-    }
-
-    private class CopyToSimSelectListener implements DialogInterface.OnClickListener {
-        private ConversationMessageData messageData;
-        private int slot;
-
-        public CopyToSimSelectListener(ConversationMessageData messageData) {
-            super();
-            this.messageData = messageData;
-        }
-
-        public void onClick(DialogInterface dialog, int which) {
-            if (which >= 0) {
-                slot = which;
-            } else if (which == DialogInterface.BUTTON_POSITIVE) {
-                int[] subId = SubscriptionManager.getSubId(slot);
-                copyToSim(messageData, subId[0]);
-            }
-        }
-    }
-
     @Override
     public void setOptionsMenuVisibility(final boolean visible) {
         setHasOptionsMenu(visible);
@@ -1502,9 +1432,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
 
     @Override
     public int getConversationSelfSubId() {
-        if (PhoneUtils.getOverrideSendingSubId() != ParticipantData.DEFAULT_SELF_SUB_ID) {
-            return PhoneUtils.getOverrideSendingSubId();
-        }
         final String selfParticipantId = mComposeMessageView.getConversationSelfId();
         final ParticipantData self = mBinding.getData().getSelfParticipantById(selfParticipantId);
         // If the self id or the self participant data hasn't been loaded yet, fallback to
@@ -1614,7 +1541,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     }
 
     public void updateActionBar(final ActionBar actionBar) {
-        mActionBar = actionBar;
         if (mComposeMessageView == null || !mComposeMessageView.updateActionBar(actionBar)) {
             updateActionAndStatusBarColor(actionBar);
             // We update this regardless of whether or not the action bar is showing so that we
@@ -1661,19 +1587,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                 final String appName = getString(R.string.app_name);
                 conversationNameView.setText(appName);
                 getActivity().setTitle(appName);
-            }
-
-            if (mBinding != null && mBinding.getData() != null) {
-                ParticipantData otherParticipant = mBinding.getData().getOtherParticipant();
-                if (otherParticipant != null && ContactUtil.isValidContactId(
-                        otherParticipant.getContactId())) {
-                    if (!TextUtils.isEmpty(mBinding.getData().getParticipantPhoneNumber())) {
-                        BugleApplication.getLookupProvider().addLookupProviderListener(
-                                mBinding.getData().getParticipantPhoneNumber(), this);
-                        BugleApplication.getLookupProvider().lookupInfoForPhoneNumber(
-                                mBinding.getData().getParticipantPhoneNumber());
-                    }
-                }
             }
 
             // When conversation is showing and media picker is not showing, then hide the action
@@ -1746,17 +1659,4 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     public int getAttachmentsClearedFlags() {
         return DraftMessageData.ATTACHMENTS_CHANGED;
     }
-
-    @Override
-    public void onNewInfoAvailable(LookupResponse response) {
-        if (response != null) {
-            Activity activity = getActivity();
-            if (activity != null) {
-                if (!TextUtils.isEmpty(response.mName)) {
-                    activity.setTitle(response.mName);
-                }
-            }
-        }
-    }
-
 }

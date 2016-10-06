@@ -21,9 +21,7 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.database.Cursor;
 import android.graphics.Typeface;
-import android.graphics.drawable.Drawable;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.NotificationCompat.Builder;
 import android.support.v4.app.NotificationCompat.WearableExtender;
@@ -39,7 +37,6 @@ import android.text.style.StyleSpan;
 import android.text.style.TextAppearanceSpan;
 import android.text.style.URLSpan;
 
-import com.android.messaging.BugleApplication;
 import com.android.messaging.Factory;
 import com.android.messaging.R;
 import com.android.messaging.datamodel.data.ConversationListItemData;
@@ -55,17 +52,11 @@ import com.android.messaging.util.Assert;
 import com.android.messaging.util.AvatarUriUtil;
 import com.android.messaging.util.BugleGservices;
 import com.android.messaging.util.BugleGservicesKeys;
-import com.android.messaging.util.ContactUtil;
 import com.android.messaging.util.ContentType;
 import com.android.messaging.util.ConversationIdSet;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.PendingIntentConstants;
 import com.android.messaging.util.UriUtil;
-import com.cyanogen.lookup.phonenumber.response.LookupResponse;
-import com.cyanogenmod.messaging.lookup.ILookupClient;
-import com.cyanogenmod.messaging.lookup.LookupProviderManager;
-import com.cyanogenmod.messaging.quickmessage.NotificationInfo;
-
 import com.google.common.collect.Lists;
 
 import java.util.ArrayList;
@@ -103,31 +94,6 @@ public abstract class MessageNotificationState extends NotificationState {
 
     private static final int REPLY_INTENT_REQUEST_CODE_OFFSET = 0;
     private static final int NUM_EXTRA_REQUEST_CODES_NEEDED = 1;
-
-    /**
-     * Handle CallerInfo lookup results. Ideally we would have info ready when building a
-     * notification, but if this is a cold lookup for this contact, we will show the unknown
-     * contact number right away, then refresh once we receive lookup results.
-     */
-    private static final LookupProviderManager.LookupProviderListener sLookupListener =
-            new LookupProviderManager.LookupProviderListener() {
-                @Override
-                public void onNewInfoAvailable(LookupResponse response) {
-                    if (response != null) {
-                        new AsyncTask<Void, Void, Void>() {
-                            @Override
-                            protected Void doInBackground(Void... params) {
-                                BugleNotifications.update(true, BugleNotifications.UPDATE_MESSAGES);
-
-                                // Notify the provider client that we are done using it.
-                                BugleApplication.releaseLookupProvider();
-                                return null;
-                            }
-                        }.execute();
-                    }
-                }
-            };
-
     protected String mTickerSender = null;
     protected CharSequence mTickerText = null;
     protected String mTitle = null;
@@ -135,8 +101,6 @@ public abstract class MessageNotificationState extends NotificationState {
     protected Uri mAttachmentUri = null;
     protected String mAttachmentType = null;
     protected boolean mTickerNoContent;
-
-    private Drawable mCustomIcon;
 
     @Override
     protected Uri getAttachmentUri() {
@@ -151,20 +115,6 @@ public abstract class MessageNotificationState extends NotificationState {
     @Override
     public int getIcon() {
         return R.drawable.ic_sms_light;
-    }
-
-    /**
-     * @return alternative small icon to display.
-     */
-    public Drawable getCustomIcon() {
-        return mCustomIcon;
-    }
-
-    /**
-     * @param icon alternative small icon to display.
-     */
-    public void setCustomIcon(Drawable icon) {
-        mCustomIcon = icon;
     }
 
     @Override
@@ -202,12 +152,11 @@ public abstract class MessageNotificationState extends NotificationState {
         final String mAuthorFirstName;
         boolean mIsManualDownloadNeeded;
         final String mMessageId;
-        final Drawable mCustomIcon;
 
         MessageLineInfo(final boolean isGroup, final String authorFullName,
                 final String authorFirstName, final CharSequence text, final Uri attachmentUrl,
                 final String attachmentType, final boolean isManualDownloadNeeded,
-                final String messageId, final Drawable customIcon) {
+                final String messageId) {
             super(BugleNotifications.LOCAL_SMS_NOTIFICATION);
             mAuthorFullName = authorFullName;
             mAuthorFirstName = authorFirstName;
@@ -216,7 +165,6 @@ public abstract class MessageNotificationState extends NotificationState {
             mAttachmentType = attachmentType;
             mIsManualDownloadNeeded = isManualDownloadNeeded;
             mMessageId = messageId;
-            mCustomIcon = customIcon;
         }
     }
 
@@ -243,9 +191,6 @@ public abstract class MessageNotificationState extends NotificationState {
         // Self participant id.
         final String mSelfParticipantId;
 
-        // Avatar uri of Self
-        final Uri mSelfAvatarUri;
-
         // List of individual line notifications to be parsed later.
         final List<NotificationLineInfo> mLineInfos;
 
@@ -268,23 +213,11 @@ public abstract class MessageNotificationState extends NotificationState {
         // Contact uri of sender
         final Uri mContactUri;
 
-        // Contact id of sender
-        final long mSenderContactId;
-
         // Subscription id.
         final int mSubId;
 
         // Number of participants
         final int mParticipantCount;
-
-        // Is it a sms message
-        final boolean mIsSms;
-
-        // Display number of the sender
-        final String mSenderDisplayDestination;
-
-        // Normalized number of the sender
-        final String mSenderNormalizedDestination;
 
         public ConversationLineInfo(final String conversationId,
                 final boolean isGroup,
@@ -292,38 +225,28 @@ public abstract class MessageNotificationState extends NotificationState {
                 final boolean includeEmailAddress,
                 final long receivedTimestamp,
                 final String selfParticipantId,
-                final Uri selfAvatarUri,
                 final String ringtoneUri,
                 final boolean notificationEnabled,
                 final boolean notificationVibrate,
                 final Uri avatarUri,
                 final Uri contactUri,
-                final long senderContactId,
                 final int subId,
-                final int participantCount,
-                final boolean isSms,
-                final String senderDisplayDestination,
-                final String senderNormalizedDestination) {
+                final int participantCount) {
             mConversationId = conversationId;
             mIsGroup = isGroup;
             mGroupConversationName = groupConversationName;
             mIncludeEmailAddress = includeEmailAddress;
             mReceivedTimestamp = receivedTimestamp;
             mSelfParticipantId = selfParticipantId;
-            mSelfAvatarUri = selfAvatarUri;
             mLineInfos = new ArrayList<NotificationLineInfo>();
             mTotalMessageCount = 0;
             mRingtoneUri = ringtoneUri;
             mAvatarUri = avatarUri;
             mContactUri = contactUri;
-            mSenderContactId = senderContactId;
             mNotificationEnabled = notificationEnabled;
             mNotificationVibrate = notificationVibrate;
             mSubId = subId;
             mParticipantCount = participantCount;
-            mIsSms = isSms;
-            mSenderDisplayDestination = senderDisplayDestination;
-            mSenderNormalizedDestination = senderNormalizedDestination;
         }
 
         public int getLatestMessageNotificationType() {
@@ -680,22 +603,6 @@ public abstract class MessageNotificationState extends NotificationState {
             return notifStyle;
         }
 
-        @Override
-        public NotificationInfo getNotificationInfo() {
-            ConversationLineInfo convInfo = mConvList.mConvInfos.get(0);
-            NotificationInfo ni = null;
-            if (convInfo != null && convInfo.mIsSms) {
-                String name = mTitle;
-                String number = convInfo.mSenderDisplayDestination;
-                ni = new NotificationInfo(name, number, convInfo.mContactUri, convInfo.mAvatarUri,
-                        convInfo.mSenderContactId,
-                        convInfo.getLatestMessageLineInfo().mText, convInfo.mReceivedTimestamp,
-                        convInfo.mConversationId, convInfo.mSelfParticipantId,
-                        convInfo.mSelfAvatarUri, convInfo.mSubId,
-                        convInfo.mSenderNormalizedDestination);
-            }
-            return ni;
-        }
     }
 
     private static boolean firstNameUsedMoreThanOnce(
@@ -936,7 +843,6 @@ public abstract class MessageNotificationState extends NotificationState {
                 String groupConversationName = null;
                 final int maxMessages = getMaxMessagesInConversationNotification();
 
-                ILookupClient lookupClient = BugleApplication.getLookupProvider();
                 do {
                     convMessageData.bind(convMessageCursor);
 
@@ -944,13 +850,9 @@ public abstract class MessageNotificationState extends NotificationState {
                     String authorFullName = convMessageData.getSenderFullName();
                     String authorFirstName = convMessageData.getSenderFirstName();
                     final String messageText = convMessageData.getText();
-                    final String senderDestination = convMessageData.getSenderDisplayDestination();
 
                     final String convId = convMessageData.getConversationId();
                     final String messageId = convMessageData.getMessageId();
-
-                    Uri profileUri = convMessageData.getSenderProfilePhotoUri();
-                    Drawable customIcon = null;
 
                     CharSequence text = messageText;
                     final boolean isManualDownloadNeeded = convMessageData.getIsMmsNotification();
@@ -972,36 +874,9 @@ public abstract class MessageNotificationState extends NotificationState {
                         }
                         final int subId = BugleDatabaseOperations.getSelfSubscriptionId(db,
                                 convData.getSelfId());
-                        final ParticipantData participantData =
-                                ParticipantData.getFromId(db, convData.getSelfId());
                         groupConversationName = convData.getName();
-
-                        // Lookup CallerInfo data if contact is unknown.
-                        if (!ContactUtil.isValidContactId(convData.getParticipantContactId())) {
-                            LookupResponse lookupResponse =
-                                    lookupClient.lookupCachedInfoForPhoneNumber(senderDestination);
-
-                            // Substitute info into conversation if
-                            // we already have data for this contact.
-                            if (lookupResponse != null) {
-                                profileUri = lookupResponse.mPhotoUrl == null ?
-                                        null : Uri.parse(lookupResponse.mPhotoUrl);
-                                authorFullName = lookupResponse.mName;
-                                customIcon = lookupResponse.mAttributionLogo;
-
-                            // If none exists, start a query to update notification later.
-                            } else {
-                                // Ensure the provider client is active so we can use it.
-                                BugleApplication.acquireLookupProvider();
-
-                                lookupClient.addLookupProviderListener(
-                                        senderDestination, sLookupListener);
-                                lookupClient.lookupInfoForPhoneNumber(senderDestination);
-                            }
-                        }
-
                         final Uri avatarUri = AvatarUriUtil.createAvatarUri(
-                                profileUri,
+                                convMessageData.getSenderProfilePhotoUri(),
                                 convMessageData.getSenderFullName(),
                                 convMessageData.getSenderNormalizedDestination(),
                                 convMessageData.getSenderContactLookupKey());
@@ -1011,18 +886,13 @@ public abstract class MessageNotificationState extends NotificationState {
                                 convData.getIncludeEmailAddress(),
                                 convMessageData.getReceivedTimeStamp(),
                                 convData.getSelfId(),
-                                AvatarUriUtil.createAvatarUri(participantData),
                                 convData.getNotificationSoundUri(),
                                 convData.getNotificationEnabled(),
                                 convData.getNotifiationVibrate(),
                                 avatarUri,
                                 convMessageData.getSenderContactLookupUri(),
-                                convMessageData.getSenderContactId(),
                                 subId,
-                                convData.getParticipantCount(),
-                                convMessageData.getIsSms(),
-                                senderDestination,
-                                convMessageData.getSenderNormalizedDestination());
+                                convData.getParticipantCount());
                         convLineInfos.put(convId, currConvInfo);
                     }
                     // Prepare the message line
@@ -1087,8 +957,8 @@ public abstract class MessageNotificationState extends NotificationState {
                             attachmentType = messagePartData.getContentType();
                         }
                         currConvInfo.mLineInfos.add(new MessageLineInfo(currConvInfo.mIsGroup,
-                                authorFullName, authorFirstName, text, attachmentUri,
-                                attachmentType, isManualDownloadNeeded, messageId, customIcon));
+                                authorFullName, authorFirstName, text,
+                                attachmentUri, attachmentType, isManualDownloadNeeded, messageId));
                     }
                     messageCount++;
                     currConvInfo.mTotalMessageCount++;
@@ -1202,14 +1072,6 @@ public abstract class MessageNotificationState extends NotificationState {
                         state.mParticipantContactUris = new ArrayList<Uri>(1);
                     }
                     state.mParticipantContactUris.add(convInfo.mContactUri);
-                }
-
-                // Apply lookup provider badge for only single-conversation notifications.
-                if (!convInfo.mIsGroup) {
-                    MessageLineInfo messageInfo = convInfo.getLatestMessageLineInfo();
-                    if (messageInfo != null) {
-                        state.setCustomIcon(messageInfo.mCustomIcon);
-                    }
                 }
             }
         }
