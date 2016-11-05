@@ -62,6 +62,9 @@ import com.cyanogenmod.messaging.util.PrefsUtils;
 
 import java.util.List;
 
+import com.sudamod.sdk.phonelocation.PhoneUtil;
+import com.sudamod.sdk.utils.LanguagesUtils;
+
 /**
  * The view for a single entry in a conversation list.
  */
@@ -121,6 +124,8 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
     private ViewGroup mCrossSwipeBackground;
     private ViewGroup mSwipeableContent;
     private TextView mConversationNameView;
+    private TextView mPhoneLocationView;
+
     private ImageView mWorkProfileIconView;
     private TextView mSnippetTextView;
     private TextView mSubjectTextView;
@@ -134,10 +139,12 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
     private AsyncImageView mImagePreviewView;
     private AudioAttachmentView mAudioAttachmentView;
     private HostInterface mHostInterface;
+    private Context mContext;
 
     public ConversationListItemView(final Context context, final AttributeSet attrs) {
         super(context, attrs);
         mData = new ConversationListItemData();
+        mContext = context;
         final Resources res = context.getResources();
     }
 
@@ -147,6 +154,7 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
         mCrossSwipeBackground = (ViewGroup) findViewById(R.id.crossSwipeBackground);
         mSwipeableContent = (ViewGroup) findViewById(R.id.swipeableContent);
         mConversationNameView = (TextView) findViewById(R.id.conversation_name);
+        mPhoneLocationView = (TextView) findViewById(R.id.phone_location);
         mSnippetTextView = (TextView) findViewById(R.id.conversation_snippet);
         mSubjectTextView = (TextView) findViewById(R.id.conversation_subject);
         mWorkProfileIconView = (ImageView) findViewById(R.id.work_profile_icon);
@@ -185,6 +193,14 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
             setSnippet();
         } else if (v == mSubjectTextView) {
             setSubject();
+        }
+    }
+
+    private void setPhoneLocation() {
+        String number = mData.getOtherParticipantNormalizedDestination();
+        number = ((number == null) ? " " : number); 
+        if (LanguagesUtils.isZh(true)) {
+            mPhoneLocationView.setText(PhoneUtil.getPhoneUtil(mContext).getLocalNumberInfo(number,true));
         }
     }
 
@@ -396,6 +412,7 @@ public class ConversationListItemView extends FrameLayout implements OnClickList
         mSnippetTextView.setTypeface(typeface, typefaceStyle);
         mSubjectTextView.setTextColor(color);
         mSubjectTextView.setTypeface(typeface, typefaceStyle);
+        setPhoneLocation();
 
         setSnippet();
         setConversationName();

@@ -166,7 +166,7 @@ public class ReceiveSmsMessageAction extends Action implements Parcelable {
             }
         }
         // Show a notification to let the user know a new message has arrived
-        BugleNotifications.update(false/*silent*/, conversationId, BugleNotifications.UPDATE_ALL);
+        BugleNotifications.update(message, false/*silent*/, conversationId, BugleNotifications.UPDATE_ALL);
 
         MessagingContentProvider.notifyMessagesChanged(conversationId);
         MessagingContentProvider.notifyPartsChanged();

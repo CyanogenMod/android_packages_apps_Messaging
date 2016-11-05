@@ -17,6 +17,7 @@
 package com.android.messaging.datamodel;
 
 import android.app.Notification;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
@@ -53,6 +54,7 @@ import com.android.messaging.datamodel.action.MarkAsReadAction;
 import com.android.messaging.datamodel.action.MarkAsSeenAction;
 import com.android.messaging.datamodel.action.RedownloadMmsAction;
 import com.android.messaging.datamodel.data.ConversationListItemData;
+import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.datamodel.media.AvatarRequestDescriptor;
 import com.android.messaging.datamodel.media.ImageResource;
 import com.android.messaging.datamodel.media.MediaRequest;
@@ -87,6 +89,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import com.sudamod.sdk.smscodehelper.SmscoderHelper;
+import com.android.messaging.receiver.CopyCaptchasReceiver;
+
 /**
  * Handle posting, updating and removing all conversation notifications.
  *
@@ -101,6 +106,8 @@ import java.util.Set;
  *
  */
 public class BugleNotifications {
+
+    public static final int CAPTCHAS_NOTIFICATION_ID = 127;
     // Logging
     public static final String TAG = LogUtil.BUGLE_NOTIFICATIONS_TAG;
 
@@ -155,6 +162,12 @@ public class BugleNotifications {
         update(silent, null /* conversationId */, coverage);
     }
 
+
+    public static void update(final boolean silent, final String conversationId,
+            final int coverage) {
+        update(null, silent, conversationId, coverage);
+    }
+
     /**
      * Entry point for posting notifications.
      * Don't call this on the UI thread.
@@ -164,14 +177,14 @@ public class BugleNotifications {
      * @param coverage Indicates which notification types should be checked. Valid values are
      * UPDATE_NONE, UPDATE_MESSAGES, UPDATE_ERRORS, or UPDATE_ALL
      */
-    public static void update(final boolean silent, final String conversationId,
+    public static void update(MessageData message, final boolean silent, final String conversationId,
             final int coverage) {
         if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
             LogUtil.v(TAG, "Update: silent = " + silent
                     + " conversationId = " + conversationId
                     + " coverage = " + coverage);
         }
-    Assert.isNotMainThread();
+        Assert.isNotMainThread();
         checkInitialized();
 
         if (!shouldNotify()) {
@@ -182,6 +195,15 @@ public class BugleNotifications {
             return;
         } else {
             if ((coverage & UPDATE_MESSAGES) != 0) {
+                if(message != null){
+                    String captchas = SmscoderHelper.getSmsCode("", message.getMessageText());
+		    String captchaProvider = SmscoderHelper.getSender("", message.getMessageText());
+                    long timeMillis = message.getReceivedTimeStamp();
+		    if(captchas != null && !"".equals(captchas)) {
+		        updateCaptchasNotication(conversationId, captchas, captchaProvider, timeMillis);
+                        return;
+		    }
+                }
                 createMessageNotification(silent, conversationId);
             }
         }
@@ -189,6 +211,62 @@ public class BugleNotifications {
             MessageNotificationState.checkFailedMessages();
         }
     }
+	
+    private static void updateCaptchasNotication(String conversationId, String captchas, String captchaProvider, long timeMillis) {
+
+        Context context = Factory.get().getApplicationContext();
+        cancelNotification(context, CAPTCHAS_NOTIFICATION_ID);
+
+        final NotificationManagerCompat notificationManager =
+                NotificationManagerCompat.from(context);
+
+        String title = TextUtils.isEmpty(captchaProvider) ? String.format(context.getString(R.string.captchas_title), captchas)
+                : String.format(context.getString(R.string.captchas_with_provider_title), captchas, captchaProvider);
+
+        NotificationCompat.BigTextStyle style = new NotificationCompat.BigTextStyle()
+                .setBigContentTitle(context.getString(R.string.captchas_title)).bigText(context.getString(R.string.captchas_content));
+
+        NotificationCompat.Builder noti = new NotificationCompat.Builder(context).setWhen(timeMillis);
+        noti.setTicker(title).setContentTitle(title).setColor(context.getResources()
+                .getColor(R.color.notification_accent_color)).setPriority(Notification.PRIORITY_HIGH).setStyle(style).setContentText(context.getString(R.string.captchas_content));
+
+        Intent captchasIntent = new Intent();
+        captchasIntent.setClass(context, CopyCaptchasReceiver.class);
+        captchasIntent.putExtra("captchas", captchas);
+        captchasIntent.putExtra("conversationId", conversationId);
+        PendingIntent captchasPendingIntent = PendingIntent.getBroadcast(context, 0, captchasIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT);
+        noti.setContentIntent(captchasPendingIntent);
+
+        // Always have to set the small icon or the notification is ignored
+        noti.setSmallIcon(R.drawable.ic_sms_multi_light);
+        int defaults = 0;
+
+        final Uri ringtoneUri = getNotificationRingtoneUriForConversationId(conversationId);
+        final BuglePrefs prefs = Factory.get().getApplicationPrefs();
+        final String prefKey = context.getString(R.string.notification_vibration_pref_key);
+
+        final boolean shoudVib = prefs.getBoolean(prefKey, context.getResources().getBoolean(
+                 R.bool.notification_vibration_pref_default));
+
+        if (shoudVib) {
+            defaults |= Notification.DEFAULT_VIBRATE;
+        }
+
+        defaults |= Notification.DEFAULT_LIGHTS;
+
+        noti.setDefaults(defaults);
+        NotificationManagerCompat nm = NotificationManagerCompat.from(context);
+        nm.notify(CAPTCHAS_NOTIFICATION_ID, noti.build());
+
+	}	
+
+    public static void cancelNotification(Context context,int notificationId) {
+        NotificationManager nm = (NotificationManager) context.getSystemService(
+                Context.NOTIFICATION_SERVICE);
+        nm.cancel(notificationId);
+    }
+	
 
     /**
      * Play a sound to notify arrival of a class 0 message
